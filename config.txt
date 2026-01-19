@@ -1,0 +1,42 @@
+# 藏鋒系統可調整設定
+# 此檔案供使用者調整參數，不需修改程式碼
+
+# =====================================
+# API 設定
+# =====================================
+# FinMind API Token (請至 https://finmindtrade.com/ 註冊取得)
+FINMIND_TOKEN=
+
+# API 呼叫限制 (免費: 300, 註冊: 600)
+API_CALLS_PER_HOUR=600
+
+# =====================================
+# 資料庫設定
+# =====================================
+DATABASE_URL=postgresql://zf_user:zf_password@localhost:5432/zf_trend
+
+# =====================================
+# Google Sheet 設定
+# =====================================
+# Service Account 憑證檔路徑
+GOOGLE_CREDENTIALS_PATH=credentials.json
+
+# 各 Sheet ID (從 Google Sheet URL 取得)
+SHEET_ID_COMPANY_MASTER=
+SHEET_ID_TW_VCP=
+SHEET_ID_TW_SANXIAN=
+
+# =====================================
+# 排程設定
+# =====================================
+# 每日任務執行時間 (HH:MM)
+DAILY_TASK_TIME=17:45
+
+# 每月任務執行日期與時間
+MONTHLY_TASK_DAY=1
+MONTHLY_TASK_TIME=09:00
+
+# =====================================
+# 日誌設定
+# =====================================
+LOG_LEVEL=INFO
