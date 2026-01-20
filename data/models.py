@@ -1,15 +1,19 @@
 """
 SQLAlchemy 資料模型
+相容 Python 3.9+
 """
-from datetime import date, datetime
+from __future__ import annotations  # 支援 Python 3.9 的 type hints
+
+from datetime import date as date_type
+from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import (
-    Column,
     String,
     Integer,
     BigInteger,
+    Boolean,
     Date,
     DateTime,
     Numeric,
@@ -79,7 +83,7 @@ class DailyPrice(Base):
     stock_id: Mapped[str] = mapped_column(
         String(10), nullable=False, index=True, comment="股票代號"
     )
-    date: Mapped[date] = mapped_column(
+    date: Mapped[date_type] = mapped_column(
         Date, nullable=False, index=True, comment="交易日期"
     )
     open_price: Mapped[Optional[Decimal]] = mapped_column(
@@ -120,7 +124,7 @@ class MarketIndex(Base):
     __tablename__ = "market_index"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    date: Mapped[date] = mapped_column(
+    date: Mapped[date_type] = mapped_column(
         Date, nullable=False, unique=True, index=True, comment="交易日期"
     )
     taiex: Mapped[Optional[Decimal]] = mapped_column(
@@ -147,7 +151,7 @@ class FilterResult(Base):
     __tablename__ = "filter_result"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    filter_date: Mapped[date] = mapped_column(
+    filter_date: Mapped[date_type] = mapped_column(
         Date, nullable=False, index=True, comment="篩選日期"
     )
     filter_type: Mapped[str] = mapped_column(
@@ -168,10 +172,10 @@ class FilterResult(Base):
         Numeric(8, 4), nullable=True, comment="近20日股價漲幅"
     )
     is_strong_list: Mapped[Optional[bool]] = mapped_column(
-        nullable=True, comment="強勢清單"
+        Boolean, nullable=True, comment="強勢清單"
     )
     is_new_high_list: Mapped[Optional[bool]] = mapped_column(
-        nullable=True, comment="新高清單"
+        Boolean, nullable=True, comment="新高清單"
     )
 
     # 三線開花專用欄位

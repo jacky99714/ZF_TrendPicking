@@ -1,0 +1,73 @@
+# 每月股票清單更新任務
+name: Monthly Stock Update
+
+on:
+  # 每月 1 日執行（台灣時間 09:00 = UTC 01:00）
+  schedule:
+    - cron: '0 1 1 * *'
+
+  # 手動觸發
+  workflow_dispatch:
+
+jobs:
+  monthly-task:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Download database artifact
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          name: sqlite-database
+          path: data/
+          if_no_artifact_found: warn
+        continue-on-error: true
+
+      - name: Set up Google credentials
+        if: ${{ secrets.GOOGLE_CREDENTIALS_JSON != '' }}
+        run: |
+          echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > credentials.json
+
+      - name: Initialize system if needed
+        run: |
+          if [ ! -f "data/zf_trend.db" ]; then
+            echo "資料庫不存在，執行初始化..."
+            python main.py init
+          fi
+
+      - name: Run monthly task
+        env:
+          GOOGLE_CREDENTIALS_PATH: credentials.json
+          SHEET_ID_COMPANY_MASTER: ${{ secrets.SHEET_ID_COMPANY_MASTER }}
+          SHEET_ID_TW_VCP: ${{ secrets.SHEET_ID_TW_VCP }}
+          SHEET_ID_TW_SANXIAN: ${{ secrets.SHEET_ID_TW_SANXIAN }}
+        run: |
+          python main.py monthly
+
+      - name: Upload database artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sqlite-database
+          path: data/zf_trend.db
+          retention-days: 90
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: monthly-logs-${{ github.run_id }}
+          path: logs/
+          retention-days: 30

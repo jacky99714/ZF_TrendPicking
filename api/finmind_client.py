@@ -205,6 +205,23 @@ class FinMindClient:
         if filtered_count > 0:
             logger.info(f"已過濾 {filtered_count} 檔 ETF/其他商品")
 
+        # 過濾指數資料（industry_category 為 'Index' 或 '大盤'）
+        # 過濾權證（industry_category 為 '所有證券'，通常以 7 開頭的 6 位數）
+        # 以及非數字的代號（如 ElectricMachinery, TPEx 等）
+        before_index_filter = len(df)
+        df = df[~df["industry_category"].isin(["Index", "大盤", "所有證券"])]
+        df = df[df["stock_id"].str.match(r"^\d{4,6}$")]  # 只保留 4-6 位純數字代號
+        index_filtered = before_index_filter - len(df)
+        if index_filtered > 0:
+            logger.info(f"已過濾 {index_filtered} 檔指數/權證/非股票資料")
+
+        # 去除重複的 stock_id（保留第一筆）
+        before_dedup = len(df)
+        df = df.drop_duplicates(subset=["stock_id"], keep="first")
+        dedup_count = before_dedup - len(df)
+        if dedup_count > 0:
+            logger.info(f"已移除 {dedup_count} 筆重複資料")
+
         logger.info(f"取得 {len(df)} 檔股票資訊")
         return df
 

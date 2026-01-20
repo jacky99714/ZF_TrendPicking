@@ -1,13 +1,14 @@
 """
 每日任務
+使用 yfinance + SQLite 架構
 """
 from datetime import date, timedelta
 from typing import Optional
 
 from loguru import logger
 
-from api.finmind_client import FinMindClient
-from data.database import Database
+from api.yfinance_client import YFinanceClient
+from data.sqlite_database import SQLiteDatabase
 from calculators.vcp_filter import VCPFilter, calculate_market_return
 from calculators.sanxian_filter import SanxianFilter
 from exporters.google_sheet import GoogleSheetExporter
@@ -19,9 +20,9 @@ class DailyTask:
     每日任務
 
     執行流程:
-    1. 取得當日股價（API 呼叫）
-    2. 取得當日大盤指數（API 呼叫）
-    3. 更新資料庫
+    1. 取得當日股價（yfinance 批量查詢）
+    2. 取得當日大盤指數
+    3. 更新 SQLite 資料庫
     4. 執行 VCP 篩選
     5. 執行三線開花篩選
     6. 匯出至 Google Sheet
@@ -29,20 +30,20 @@ class DailyTask:
 
     def __init__(
         self,
-        client: Optional[FinMindClient] = None,
-        db: Optional[Database] = None,
+        client: Optional[YFinanceClient] = None,
+        db: Optional[SQLiteDatabase] = None,
         exporter: Optional[GoogleSheetExporter] = None
     ):
         """
         初始化每日任務
 
         Args:
-            client: FinMind API 客戶端
-            db: 資料庫連線
+            client: yfinance API 客戶端
+            db: SQLite 資料庫連線
             exporter: Google Sheet 匯出器
         """
-        self.client = client or FinMindClient()
-        self.db = db or Database()
+        self.client = client or YFinanceClient()
+        self.db = db or SQLiteDatabase()
         self.exporter = exporter or GoogleSheetExporter()
 
         # 篩選器
@@ -100,8 +101,25 @@ class DailyTask:
         }
 
         try:
-            # Step 1: 取得並儲存股價
-            price_count = self._fetch_and_save_prices(target_date)
+            # 確保資料表存在
+            self.db.create_tables()
+
+            # Step 1: 確保有股票清單
+            stock_info = self.db.get_stock_info_dict()
+            if not stock_info:
+                logger.info("股票清單為空，先取得股票清單...")
+                stock_df = self.client.get_stock_info()
+                if not stock_df.empty:
+                    self.db.upsert_stock_info(stock_df)
+                    stock_info = self.db.get_stock_info_dict()
+
+            if not stock_info:
+                result["errors"].append("無法取得股票清單")
+                logger.error("無法取得股票清單，任務結束")
+                return result
+
+            # Step 2: 取得並儲存股價（批量查詢）
+            price_count = self._fetch_and_save_prices(target_date, stock_info)
             result["price_count"] = price_count
 
             if price_count == 0:
@@ -109,17 +127,17 @@ class DailyTask:
                 logger.warning("無股價資料，任務結束")
                 return result
 
-            # Step 2: 取得並儲存大盤指數
+            # Step 3: 取得並儲存大盤指數
             market_count = self._fetch_and_save_market_index(target_date)
             if market_count == 0:
                 logger.warning("無大盤指數資料，VCP 篩選可能不準確")
 
-            # Step 3: 執行篩選
+            # Step 4: 執行篩選
             vcp_results, sanxian_results = self._run_filters(target_date)
             result["vcp_count"] = len(vcp_results)
             result["sanxian_count"] = len(sanxian_results)
 
-            # Step 4: 匯出至 Google Sheet
+            # Step 5: 匯出至 Google Sheet
             self._export_to_sheet(target_date, vcp_results, sanxian_results)
 
             result["success"] = True
@@ -139,12 +157,21 @@ class DailyTask:
 
         return result
 
-    def _fetch_and_save_prices(self, target_date: date) -> int:
-        """取得並儲存股價"""
+    def _fetch_and_save_prices(self, target_date: date, stock_info: dict) -> int:
+        """取得並儲存股價（批量查詢）"""
         logger.info("取得當日股價...")
 
-        # 從 API 取得股價
-        price_df = self.client.get_stock_price(target_date)
+        # 取得所有股票代號和市場類型
+        stock_ids = list(stock_info.keys())
+        market_types = self.db.get_stock_market_types()
+
+        # 使用 yfinance 批量查詢
+        price_df = self.client.get_stock_price(
+            start_date=target_date,
+            end_date=target_date,
+            stock_ids=stock_ids,
+            market_types=market_types
+        )
 
         if price_df.empty:
             return 0
@@ -186,7 +213,7 @@ class DailyTask:
         # 取得股票基本資料
         stock_info = self.db.get_stock_info_dict()
         if not stock_info:
-            logger.warning("股票基本資料為空，請先執行 'python main.py init' 或 'python main.py monthly'")
+            logger.warning("股票基本資料為空，請先執行 'python main.py init'")
 
         # VCP 篩選
         vcp_df = self.vcp_filter.filter(price_df, market_return, target_date)

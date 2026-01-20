@@ -1,0 +1,97 @@
+# 每日股票篩選任務
+name: Daily Stock Screening
+
+on:
+  # 台股收盤後執行（台灣時間 17:45 = UTC 09:45）
+  schedule:
+    - cron: '45 9 * * 1-5'  # 週一至週五 UTC 09:45
+
+  # 手動觸發
+  workflow_dispatch:
+    inputs:
+      target_date:
+        description: '目標日期 (YYYY-MM-DD，留空使用今天)'
+        required: false
+        default: ''
+      force:
+        description: '強制執行（忽略假日）'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  daily-task:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Download database artifact
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          name: sqlite-database
+          path: data/
+          if_no_artifact_found: warn
+        continue-on-error: true
+
+      - name: Set up Google credentials
+        if: ${{ secrets.GOOGLE_CREDENTIALS_JSON != '' }}
+        run: |
+          echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > credentials.json
+
+      - name: Initialize system if needed
+        run: |
+          if [ ! -f "data/zf_trend.db" ]; then
+            echo "資料庫不存在，執行初始化..."
+            python main.py init
+          else
+            echo "資料庫已存在，跳過初始化"
+          fi
+
+      - name: Run daily task
+        env:
+          GOOGLE_CREDENTIALS_PATH: credentials.json
+          SHEET_ID_COMPANY_MASTER: ${{ secrets.SHEET_ID_COMPANY_MASTER }}
+          SHEET_ID_TW_VCP: ${{ secrets.SHEET_ID_TW_VCP }}
+          SHEET_ID_TW_SANXIAN: ${{ secrets.SHEET_ID_TW_SANXIAN }}
+        run: |
+          if [ "${{ github.event.inputs.target_date }}" != "" ]; then
+            if [ "${{ github.event.inputs.force }}" == "true" ]; then
+              python main.py daily ${{ github.event.inputs.target_date }} --force
+            else
+              python main.py daily ${{ github.event.inputs.target_date }}
+            fi
+          else
+            if [ "${{ github.event.inputs.force }}" == "true" ]; then
+              python main.py daily --force
+            else
+              python main.py daily
+            fi
+          fi
+
+      - name: Upload database artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sqlite-database
+          path: data/zf_trend.db
+          retention-days: 90
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ github.run_id }}
+          path: logs/
+          retention-days: 30

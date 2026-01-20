@@ -41,8 +41,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from config.settings import LOG_CONFIG, SCHEDULE_CONFIG
-from api.finmind_client import FinMindClient
-from data.database import Database
+from api.yfinance_client import YFinanceClient
+from data.sqlite_database import SQLiteDatabase
 from exporters.google_sheet import GoogleSheetExporter
 from tasks.daily_task import DailyTask, run_daily_task
 from tasks.monthly_task import MonthlyTask, run_monthly_task
@@ -74,8 +74,8 @@ def cmd_init():
     logger.info("=== 初始化系統 ===")
 
     # 初始化元件
-    db = Database()
-    client = FinMindClient()
+    db = SQLiteDatabase()
+    client = YFinanceClient()
 
     # 建立資料表
     logger.info("建立資料表...")
@@ -85,18 +85,26 @@ def cmd_init():
     logger.info("取得股票清單...")
     stock_df = client.get_stock_info()
     if stock_df.empty:
-        logger.error("無法取得股票清單，請檢查 API Token 或網路連線")
+        logger.error("無法取得股票清單，請檢查網路連線")
         return
     db.upsert_stock_info(stock_df)
     logger.info(f"已儲存 {len(stock_df)} 檔股票資訊")
 
-    # 取得歷史股價（一次查詢整年）
-    logger.info("取得歷史股價...")
+    # 取得歷史股價（批量查詢）
+    logger.info("取得歷史股價（批量下載）...")
     end_date = date.today()
     start_date = end_date - timedelta(days=365)
 
+    # 取得市場類型
+    market_types = db.get_stock_market_types()
+    stock_ids = list(market_types.keys())
+
     # 批次查詢股價
-    price_df = client.get_stock_price(start_date, end_date)
+    price_df = client.get_stock_price(
+        start_date, end_date,
+        stock_ids=stock_ids,
+        market_types=market_types
+    )
     if not price_df.empty:
         db.upsert_daily_price(price_df)
         logger.info(f"已儲存 {len(price_df)} 筆股價資料")
@@ -113,6 +121,7 @@ def cmd_init():
     # 顯示 API 使用統計
     stats = client.get_stats()
     logger.info(f"API 呼叫次數: {stats['total_requests']}")
+    logger.info(f"資料庫大小: {db.get_db_size()}")
 
 
 def cmd_daily(target_date: date = None, skip_non_trading_day: bool = True):
@@ -190,18 +199,20 @@ def cmd_health():
     logger.info("=== 健康檢查 ===")
 
     # 資料庫檢查
-    db = Database()
+    db = SQLiteDatabase()
     db_ok = db.health_check()
-    logger.info(f"資料庫: {'✓ 正常' if db_ok else '✗ 異常'}")
+    logger.info(f"SQLite 資料庫: {'✓ 正常' if db_ok else '✗ 異常'}")
+    if db_ok:
+        logger.info(f"  - 檔案大小: {db.get_db_size()}")
 
     # Google Sheet 檢查
     exporter = GoogleSheetExporter()
     sheet_ok = exporter.health_check()
     logger.info(f"Google Sheet: {'✓ 正常' if sheet_ok else '✗ 未連線'}")
 
-    # API 檢查
+    # API 檢查（yfinance 免費無限制）
     try:
-        client = FinMindClient()
+        client = YFinanceClient()
         # 嘗試取得少量資料
         df = client.get_stock_info()
         api_ok = not df.empty
@@ -209,7 +220,7 @@ def cmd_health():
         api_ok = False
         logger.error(f"API 檢查失敗: {e}")
 
-    logger.info(f"FinMind API: {'✓ 正常' if api_ok else '✗ 異常'}")
+    logger.info(f"yfinance API: {'✓ 正常' if api_ok else '✗ 異常'}")
 
     # 總結
     all_ok = db_ok and api_ok
@@ -227,14 +238,26 @@ def cmd_backfill(days: int = 30):
     """
     logger.info(f"=== 補齊 {days} 天歷史資料 ===")
 
-    db = Database()
-    client = FinMindClient()
+    db = SQLiteDatabase()
+    client = YFinanceClient()
 
     end_date = date.today()
     start_date = end_date - timedelta(days=days)
 
-    # 取得股價
-    price_df = client.get_stock_price(start_date, end_date)
+    # 取得市場類型
+    market_types = db.get_stock_market_types()
+    stock_ids = list(market_types.keys())
+
+    if not stock_ids:
+        logger.warning("尚無股票清單，請先執行 'python main.py init'")
+        return
+
+    # 取得股價（批量下載）
+    price_df = client.get_stock_price(
+        start_date, end_date,
+        stock_ids=stock_ids,
+        market_types=market_types
+    )
     if not price_df.empty:
         db.upsert_daily_price(price_df)
         logger.info(f"已補齊 {len(price_df)} 筆股價資料")
