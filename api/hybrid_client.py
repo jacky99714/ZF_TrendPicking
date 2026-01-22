@@ -21,8 +21,8 @@ class HybridClient:
 
     備援策略:
     - get_stock_info(): 主要 FinMind，備援 yfinance
-    - get_stock_price(): 主要 yfinance，備援 FinMind
-    - get_market_index(): 主要 yfinance，備援 FinMind
+    - get_stock_price(): 主要 FinMind，備援 yfinance
+    - get_market_index(): 主要 FinMind，備援 yfinance
     """
 
     # 備援觸發閾值
@@ -114,8 +114,8 @@ class HybridClient:
         批量取得股票每日股價（含補齊機制）
 
         備援策略:
-        - 主要: yfinance（免費無限制）
-        - 備援: FinMind（需要付費 Token）
+        - 主要: FinMind（資料與券商一致）
+        - 備援: yfinance（免費無限制）
 
         補齊機制:
         1. 主要來源取得資料
@@ -151,10 +151,10 @@ class HybridClient:
         primary_df = pd.DataFrame()
         need_full_fallback = False
 
-        # ===== 主要來源: yfinance =====
-        logger.info(f"[主要] 使用 yfinance 取得股價資料 ({expected_count} 檔)...")
+        # ===== 主要來源: FinMind =====
+        logger.info(f"[主要] 使用 FinMind 取得股價資料 ({expected_count} 檔)...")
         try:
-            primary_df = self._yfinance.get_stock_price(
+            primary_df = self._finmind.get_stock_price(
                 start_date=start_date,
                 end_date=end_date,
                 stock_ids=stock_ids,
@@ -163,7 +163,7 @@ class HybridClient:
             )
 
             if primary_df.empty:
-                self._log_fallback("get_stock_price", "yfinance", "FinMind", "資料為空")
+                self._log_fallback("get_stock_price", "FinMind", "yfinance", "資料為空")
                 need_full_fallback = True
             else:
                 # 檢查成功率
@@ -172,22 +172,22 @@ class HybridClient:
 
                 if success_ratio < self.MIN_PRICE_RATIO:
                     self._log_fallback(
-                        "get_stock_price", "yfinance", "FinMind",
+                        "get_stock_price", "FinMind", "yfinance",
                         f"成功率過低 ({len(fetched_stocks)}/{expected_count} = {success_ratio:.1%})"
                     )
                     need_full_fallback = True
                 else:
-                    logger.info(f"[主要] yfinance 取得 {len(primary_df)} 筆股價 ({len(fetched_stocks)} 檔)")
+                    logger.info(f"[主要] FinMind 取得 {len(primary_df)} 筆股價 ({len(fetched_stocks)} 檔)")
 
         except Exception as e:
-            self._log_fallback("get_stock_price", "yfinance", "FinMind", f"API 錯誤: {e}")
+            self._log_fallback("get_stock_price", "FinMind", "yfinance", f"API 錯誤: {e}")
             need_full_fallback = True
 
         # ===== 完整備援模式（主要來源完全失敗）=====
         if need_full_fallback:
-            logger.info(f"[備援] 使用 FinMind 取得全部股價資料...")
+            logger.info(f"[備援] 使用 yfinance 取得全部股價資料...")
             try:
-                fallback_df = self._finmind.get_stock_price(
+                fallback_df = self._yfinance.get_stock_price(
                     start_date=start_date,
                     end_date=end_date,
                     stock_ids=stock_ids,
@@ -196,10 +196,10 @@ class HybridClient:
                 )
                 if not fallback_df.empty:
                     unique_stocks = fallback_df["stock_id"].nunique()
-                    logger.info(f"[備援] FinMind 取得 {len(fallback_df)} 筆股價 ({unique_stocks} 檔)")
+                    logger.info(f"[備援] yfinance 取得 {len(fallback_df)} 筆股價 ({unique_stocks} 檔)")
                     return fallback_df
             except Exception as e:
-                logger.error(f"[備援] FinMind 也失敗: {e}")
+                logger.error(f"[備援] yfinance 也失敗: {e}")
 
             logger.error("股價資料取得失敗（主要和備援都失敗）")
             return pd.DataFrame()
@@ -213,7 +213,7 @@ class HybridClient:
             return primary_df
 
         # 有缺失，嘗試用備援來源補齊
-        logger.info(f"[補齊] 發現 {len(missing_stocks)} 檔缺失，使用 FinMind 補齊...")
+        logger.info(f"[補齊] 發現 {len(missing_stocks)} 檔缺失，使用 yfinance 補齊...")
         logger.debug(f"[補齊] 缺失股票: {sorted(missing_stocks)[:10]}{'...' if len(missing_stocks) > 10 else ''}")
 
         try:
@@ -223,7 +223,7 @@ class HybridClient:
                 for sid in missing_stocks
             } if market_types else None
 
-            fill_df = self._finmind.get_stock_price(
+            fill_df = self._yfinance.get_stock_price(
                 start_date=start_date,
                 end_date=end_date,
                 stock_ids=list(missing_stocks),
@@ -233,14 +233,14 @@ class HybridClient:
 
             if not fill_df.empty:
                 fill_count = fill_df["stock_id"].nunique()
-                logger.info(f"[補齊] FinMind 補齊 {len(fill_df)} 筆股價 ({fill_count} 檔)")
+                logger.info(f"[補齊] yfinance 補齊 {len(fill_df)} 筆股價 ({fill_count} 檔)")
 
                 # 合併主要來源和補齊資料
                 result_df = pd.concat([primary_df, fill_df], ignore_index=True)
 
                 # 記錄補齊事件
                 self._log_fallback(
-                    "get_stock_price_fill", "yfinance", "FinMind",
+                    "get_stock_price_fill", "FinMind", "yfinance",
                     f"補齊 {fill_count}/{len(missing_stocks)} 檔缺失資料"
                 )
 
@@ -248,10 +248,10 @@ class HybridClient:
                 logger.info(f"[結果] 合併後共 {len(result_df)} 筆股價 ({final_count} 檔)")
                 return result_df
             else:
-                logger.warning(f"[補齊] FinMind 無法補齊缺失資料")
+                logger.warning(f"[補齊] yfinance 無法補齊缺失資料")
 
         except Exception as e:
-            logger.warning(f"[補齊] FinMind 補齊失敗: {e}")
+            logger.warning(f"[補齊] yfinance 補齊失敗: {e}")
 
         # 補齊失敗，返回主要來源的資料（部分資料總比沒有好）
         still_missing = len(missing_stocks)
@@ -268,8 +268,8 @@ class HybridClient:
         取得大盤指數
 
         備援策略:
-        - 主要: yfinance（^TWII 台灣加權指數）
-        - 備援: FinMind（TaiwanStockTotalReturnIndex）
+        - 主要: FinMind（TaiwanStockTotalReturnIndex）
+        - 備援: yfinance（^TWII 台灣加權指數）
 
         觸發備援條件:
         - API 錯誤
@@ -285,37 +285,37 @@ class HybridClient:
             - date: 日期
             - taiex: 加權指數
         """
-        # 主要來源: yfinance
-        logger.info("[主要] 使用 yfinance 取得大盤指數...")
-        try:
-            df = self._yfinance.get_market_index(
-                start_date=start_date,
-                end_date=end_date,
-                retry_count=retry_count,
-            )
-
-            if df.empty:
-                self._log_fallback("get_market_index", "yfinance", "FinMind", "資料為空")
-            else:
-                logger.info(f"[主要] yfinance 取得 {len(df)} 筆大盤指數")
-                return df
-
-        except Exception as e:
-            self._log_fallback("get_market_index", "yfinance", "FinMind", f"API 錯誤: {e}")
-
-        # 備援來源: FinMind
-        logger.info("[備援] 使用 FinMind 取得大盤指數...")
+        # 主要來源: FinMind
+        logger.info("[主要] 使用 FinMind 取得大盤指數...")
         try:
             df = self._finmind.get_market_index(
                 start_date=start_date,
                 end_date=end_date,
                 retry_count=retry_count,
             )
+
+            if df.empty:
+                self._log_fallback("get_market_index", "FinMind", "yfinance", "資料為空")
+            else:
+                logger.info(f"[主要] FinMind 取得 {len(df)} 筆大盤指數")
+                return df
+
+        except Exception as e:
+            self._log_fallback("get_market_index", "FinMind", "yfinance", f"API 錯誤: {e}")
+
+        # 備援來源: yfinance
+        logger.info("[備援] 使用 yfinance 取得大盤指數...")
+        try:
+            df = self._yfinance.get_market_index(
+                start_date=start_date,
+                end_date=end_date,
+                retry_count=retry_count,
+            )
             if not df.empty:
-                logger.info(f"[備援] FinMind 取得 {len(df)} 筆大盤指數")
+                logger.info(f"[備援] yfinance 取得 {len(df)} 筆大盤指數")
                 return df
         except Exception as e:
-            logger.error(f"[備援] FinMind 也失敗: {e}")
+            logger.error(f"[備援] yfinance 也失敗: {e}")
 
         # 兩者都失敗
         logger.error("大盤指數取得失敗（主要和備援都失敗）")
