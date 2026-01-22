@@ -664,6 +664,10 @@ class GoogleSheetExporter:
                 worksheet.update(sanxian_rows, f"A{current_row}")
 
             logger.info(f"三線開花驗證資料匯出完成: {len(sanxian_data)} 筆 -> {tab_name}")
+
+            # 自動排序頁籤（最新日期在前）
+            self.sort_worksheets_by_date(sheet_id)
+
             return True
 
         except gspread.exceptions.APIError as e:
@@ -672,7 +676,7 @@ class GoogleSheetExporter:
                     logger.warning(f"Google API 限流，{GSHEET_RETRY_DELAY} 秒後重試 ({retry + 1}/{GSHEET_MAX_RETRIES})...")
                     time.sleep(GSHEET_RETRY_DELAY * (retry + 1))
                     try:
-                        # 重試匯出
+                        # 重試匯出（已包含排序）
                         return self.export_verification(
                             vcp_data, sanxian_data, target_date,
                             market_return_20d, sheet_id
