@@ -265,10 +265,10 @@ class FinMindClient:
         }
 
         def sort_industries(industry_list):
-            """排序產業分類，較具體的排在前面"""
+            """排序產業分類，較廣泛的排在前面"""
             if not industry_list or len(industry_list) <= 1:
                 return industry_list
-            return sorted(industry_list, key=lambda x: INDUSTRY_PRIORITY.get(x, 50))
+            return sorted(industry_list, key=lambda x: INDUSTRY_PRIORITY.get(x, 50), reverse=True)
 
         # 設定產業分類1和產業分類2（排序後）
         df["industry_list"] = df["industry_list"].apply(sort_industries)
