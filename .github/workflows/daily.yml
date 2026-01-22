@@ -64,9 +64,15 @@ jobs:
         continue-on-error: true
 
       - name: Set up Google credentials
-        if: ${{ secrets.GOOGLE_CREDENTIALS_JSON != '' }}
+        env:
+          GOOGLE_CREDS: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
         run: |
-          echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > credentials.json
+          if [ -n "$GOOGLE_CREDS" ]; then
+            echo "$GOOGLE_CREDS" > credentials.json
+            echo "✅ Google credentials 已設定"
+          else
+            echo "⚠️ 未設定 GOOGLE_CREDENTIALS_JSON"
+          fi
 
       - name: Initialize system if needed
         env:
