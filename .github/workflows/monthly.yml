@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write  # 需要寫入權限才能建立 Release
+      actions: read    # 需要讀取權限才能下載 Artifact
 
     steps:
       - name: Checkout repository
