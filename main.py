@@ -27,6 +27,13 @@
     # 補齊歷史資料
     python main.py backfill [天數]
 """
+import warnings
+
+# 忽略第三方庫的棄用警告（如 yfinance 的 Pandas 警告）
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", message=".*Timestamp.utcnow.*")
+
 import sys
 from datetime import date, timedelta
 from pathlib import Path
