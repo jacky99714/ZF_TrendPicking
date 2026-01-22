@@ -382,7 +382,7 @@ class YFinanceClient:
                         end=(end_date + timedelta(days=1)).strftime("%Y-%m-%d"),
                         progress=False,
                         group_by="ticker",
-                        auto_adjust=False,
+                        auto_adjust=True,  # 使用調整後收盤價（考慮除權息）
                         threads=True,
                     )
 
@@ -547,7 +547,7 @@ class YFinanceClient:
                     start=start_date.strftime("%Y-%m-%d"),
                     end=(end_date + timedelta(days=1)).strftime("%Y-%m-%d"),
                     progress=False,
-                    auto_adjust=False,
+                    auto_adjust=True,  # 使用調整後收盤價
                 )
 
                 if df.empty:
