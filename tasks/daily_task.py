@@ -318,10 +318,8 @@ class DailyTask:
         # VCP = 強勢 OR 新高
         df["is_vcp"] = df["is_strong"] | df["is_new_high"]
 
-        # 只保留 VCP 結果供驗證
-        result_df = df[df["is_vcp"]].copy()
-
-        return result_df.to_dict("records")
+        # 輸出所有股票的計算數據供驗證
+        return df.to_dict("records")
 
     def _prepare_sanxian_verification(
         self,
@@ -365,10 +363,8 @@ class DailyTask:
         second_high = df["second_high_55d"].fillna(1).replace(0, 1)
         df["gap_ratio"] = (close / second_high - 1)
 
-        # 只保留三線開花結果供驗證
-        result_df = df[df["is_sanxian"]].copy()
-
-        return result_df.to_dict("records")
+        # 輸出所有股票的計算數據供驗證
+        return df.to_dict("records")
 
     def _export_to_sheet(
         self,
