@@ -44,7 +44,10 @@ class StockInfo(Base):
         String(50), nullable=False, comment="股票名稱"
     )
     industry_category: Mapped[Optional[str]] = mapped_column(
-        String(50), nullable=True, comment="產業分類"
+        String(50), nullable=True, comment="產業分類1"
+    )
+    industry_category2: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True, comment="產業分類2"
     )
     stock_type: Mapped[Optional[str]] = mapped_column(
         String(20), nullable=True, comment="股票類型 (twse/tpex)"
@@ -66,7 +69,7 @@ class StockInfo(Base):
             "stock_name": self.stock_name,
             "company_name": self.stock_name,  # 用股名替代公司名
             "industry_category": self.industry_category or "-",
-            "industry_category2": "-",  # 無此資料
+            "industry_category2": self.industry_category2 or "-",
             "product_mix": "-",  # 無此資料
         }
 

@@ -230,12 +230,30 @@ class FinMindClient:
             if delist_filtered > 0:
                 logger.info(f"已過濾 {delist_filtered} 檔已下市/停牌股票")
 
-        # 去除重複的 stock_id（保留第一筆）
+        # 處理多重產業分類（同一股票可能有多個 industry_category）
+        # 例如：2330 台積電 有「半導體業」和「電子工業」兩個分類
         before_dedup = len(df)
+
+        # 按 stock_id 分組，取得所有產業分類
+        industry_groups = df.groupby("stock_id")["industry_category"].apply(list).reset_index()
+        industry_groups.columns = ["stock_id", "industry_list"]
+
+        # 去重後保留第一筆的其他欄位
         df = df.drop_duplicates(subset=["stock_id"], keep="first")
+
+        # 合併產業分類列表
+        df = df.merge(industry_groups, on="stock_id", how="left")
+
+        # 設定產業分類1和產業分類2
+        df["industry_category"] = df["industry_list"].apply(lambda x: x[0] if x else "-")
+        df["industry_category2"] = df["industry_list"].apply(lambda x: x[1] if len(x) > 1 else "-")
+
+        # 移除暫時欄位
+        df = df.drop(columns=["industry_list"])
+
         dedup_count = before_dedup - len(df)
         if dedup_count > 0:
-            logger.info(f"已移除 {dedup_count} 筆重複資料")
+            logger.info(f"已合併 {dedup_count} 筆重複資料（多重產業分類）")
 
         logger.info(f"取得 {len(df)} 檔股票資訊")
         return df

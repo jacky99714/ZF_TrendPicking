@@ -88,6 +88,7 @@ class MonthlyTask:
             return
 
         # 轉換為匯出格式（使用 to_dict 而非 iterrows 提升效能）
+        # FinMind 提供多重產業分類（如 2330 台積電：半導體業、電子工業）
         records = stock_df.to_dict("records")
         data = [
             {
@@ -95,7 +96,7 @@ class MonthlyTask:
                 "stock_name": row["stock_name"],
                 "company_name": row["stock_name"],
                 "industry_category": row.get("industry_category", "-"),
-                "industry_category2": "-",
+                "industry_category2": row.get("industry_category2", "-"),
                 "product_mix": "-",
             }
             for row in records

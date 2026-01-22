@@ -107,7 +107,7 @@ class SQLiteDatabase:
             return 0
 
         # 只保留需要的欄位
-        required_cols = ["stock_id", "stock_name", "industry_category", "type"]
+        required_cols = ["stock_id", "stock_name", "industry_category", "industry_category2", "type"]
         df = df[[c for c in required_cols if c in df.columns]].copy()
         df = df.rename(columns={"type": "stock_type"})
 
@@ -122,12 +122,14 @@ class SQLiteDatabase:
                 if existing:
                     existing.stock_name = row["stock_name"]
                     existing.industry_category = row.get("industry_category")
+                    existing.industry_category2 = row.get("industry_category2")
                     existing.stock_type = row.get("stock_type")
                 else:
                     session.add(StockInfo(
                         stock_id=row["stock_id"],
                         stock_name=row["stock_name"],
                         industry_category=row.get("industry_category"),
+                        industry_category2=row.get("industry_category2"),
                         stock_type=row.get("stock_type"),
                     ))
                 count += 1
@@ -151,6 +153,7 @@ class SQLiteDatabase:
             row["stock_id"]: {
                 "stock_name": row["stock_name"],
                 "industry_category": row.get("industry_category", "-"),
+                "industry_category2": row.get("industry_category2", "-"),
                 "stock_type": row.get("stock_type", "twse"),
             }
             for _, row in df.iterrows()

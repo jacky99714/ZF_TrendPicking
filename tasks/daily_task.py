@@ -261,7 +261,7 @@ class DailyTask:
                 "stock_name": info.get("stock_name", ""),
                 "company_name": info.get("stock_name", ""),
                 "industry_category": info.get("industry_category", "-"),
-                "industry_category2": "-",
+                "industry_category2": info.get("industry_category2", "-"),
                 "product_mix": "-",
             })
             results.append(result)
