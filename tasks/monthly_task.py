@@ -104,8 +104,11 @@ class MonthlyTask:
         # 匯出公司主檔
         self.exporter.export_company_master(data)
 
-        # 更新紀錄
-        self.exporter.update_company_master_log()
+        # 更新紀錄（統一表格格式）
+        self.exporter.update_company_master_log(
+            note=f"公司主檔 {len(data)} 檔",
+            success=True
+        )
 
 
 def run_monthly_task() -> dict:

@@ -181,14 +181,21 @@ class GoogleSheetExporter:
     def update_company_master_log(
         self,
         sheet_id: Optional[str] = None,
-        update_date: Optional[date] = None
+        note: str = "",
+        success: bool = True
     ) -> bool:
         """
-        更新公司主檔更新紀錄
+        更新公司主檔更新紀錄（統一表格格式）
+
+        格式：
+        A1: 更新紀錄
+        A2: 時間 | 狀態 | 備註
+        A3: 2026-01-22 06:28:58 | 成功 | VCP 257 檔
 
         Args:
             sheet_id: Sheet ID
-            update_date: 更新日期
+            note: 備註（如 "VCP 257 檔, 三線 111 檔"）
+            success: 是否成功
 
         Returns:
             是否成功
@@ -209,15 +216,39 @@ class GoogleSheetExporter:
                 worksheet = sheet.add_worksheet(
                     title="台股更新紀錄",
                     rows=100,
-                    cols=2
+                    cols=3
                 )
 
-            # SPEC: 請在分頁二 "台股更新紀錄" 的 A1 欄位寫入更新時間
-            now = datetime.now()
-            update_time = f"{now.strftime('%Y-%m-%d %H:%M:%S')} 更新完成"
-            worksheet.update([[update_time]], "A1")
+            # 取得現有資料
+            existing_data = worksheet.get_all_values()
 
-            logger.info(f"公司主檔更新紀錄已記錄: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+            # 準備新記錄
+            now = datetime.now()
+            time_str = now.strftime("%Y-%m-%d %H:%M:%S")
+            status = "成功" if success else "失敗"
+            new_record = [time_str, status, note]
+
+            # 建立完整資料（標題 + 表頭 + 新記錄 + 舊記錄）
+            title_row = ["更新紀錄"]
+            header_row = ["時間", "狀態", "備註"]
+
+            # 取得舊記錄（跳過標題和表頭）
+            old_records = []
+            if len(existing_data) > 2:
+                old_records = existing_data[2:]
+
+            # 組合：新記錄在最上面
+            all_rows = [title_row, header_row, new_record] + old_records
+
+            # 限制最多保留 100 筆記錄
+            if len(all_rows) > 102:  # 標題 + 表頭 + 100筆
+                all_rows = all_rows[:102]
+
+            # 清空並重新寫入
+            worksheet.clear()
+            worksheet.update(all_rows, "A1")
+
+            logger.info(f"更新紀錄已記錄: {time_str} | {status} | {note}")
             return True
 
         except Exception as e:
@@ -230,9 +261,9 @@ class GoogleSheetExporter:
         sheet_id: Optional[str] = None
     ) -> bool:
         """
-        將錯誤日誌寫入 Google Sheet「台股更新紀錄」分頁
+        將錯誤日誌寫入 Google Sheet「台股更新紀錄」分頁（統一表格格式）
 
-        SPEC: 每次重試皆須記錄 Time, Retry_Count 與 Last_Error_Code
+        使用 update_company_master_log() 寫入失敗記錄
 
         Args:
             error_logs: 錯誤日誌列表，每項包含 time, retry_count, status_code
@@ -244,56 +275,30 @@ class GoogleSheetExporter:
         if not error_logs:
             return True
 
-        sheet_id = sheet_id or SHEET_IDS.get("company_master")
-        if not sheet_id:
-            return False
+        # 將錯誤日誌轉換為統一格式寫入
+        for log in error_logs:
+            status_code = log.get("status_code", "")
+            retry_count = log.get("retry_count", 0)
+            params = log.get("params", {})
 
-        sheet = self._get_sheet(sheet_id)
-        if not sheet:
-            return False
+            # 組合備註
+            note = f"HTTP {status_code}"
+            if retry_count > 0:
+                note += f" (重試 {retry_count} 次)"
+            if params:
+                dataset = params.get("dataset", "")
+                if dataset:
+                    note += f" - {dataset}"
 
-        try:
-            # 取得或建立「台股更新紀錄」分頁
-            try:
-                worksheet = sheet.worksheet("台股更新紀錄")
-            except gspread.WorksheetNotFound:
-                worksheet = sheet.add_worksheet(
-                    title="台股更新紀錄",
-                    rows=100,
-                    cols=4
-                )
+            # 使用統一格式寫入
+            self.update_company_master_log(
+                sheet_id=sheet_id,
+                note=note,
+                success=False
+            )
 
-            # 找到下一個空白行（從 A2 開始，A1 用於更新時間）
-            existing_data = worksheet.get_all_values()
-            next_row = len(existing_data) + 1
-            if next_row < 3:
-                next_row = 3  # 至少從第 3 行開始（第 1 行更新時間，第 2 行表頭）
-
-            # 如果還沒有表頭，先寫入
-            if len(existing_data) < 2:
-                worksheet.update([["Time", "Retry_Count", "Last_Error_Code", "備註"]], "A2")
-                next_row = 3
-
-            # 寫入錯誤日誌
-            rows = [
-                [
-                    log.get("time", ""),
-                    str(log.get("retry_count", 0)),
-                    str(log.get("status_code", "")),
-                    str(log.get("params", {})),
-                ]
-                for log in error_logs
-            ]
-
-            if rows:
-                worksheet.update(rows, f"A{next_row}")
-                logger.info(f"已寫入 {len(rows)} 筆錯誤日誌到 Google Sheet")
-
-            return True
-
-        except Exception as e:
-            logger.error(f"錯誤日誌寫入失敗: {e}")
-            return False
+        logger.info(f"已寫入 {len(error_logs)} 筆錯誤日誌到 Google Sheet")
+        return True
 
     # ==================== VCP 篩選結果 ====================
 
