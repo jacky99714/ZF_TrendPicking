@@ -123,61 +123,29 @@ class GoogleSheetExporter:
                 )
                 is_first_time = True
 
-            if is_first_time:
-                # SPEC: 首次撈取依代號的升冪排序，寫入全部資料
-                sorted_data = sorted(data, key=lambda x: x.get("stock_id", ""))
-                rows = [headers] + [
-                    [
-                        row.get("stock_id", ""),
-                        row.get("stock_name", ""),
-                        row.get("company_name", row.get("stock_name", "")),
-                        row.get("industry_category", "-"),
-                        row.get("industry_category2", "-"),
-                        row.get("product_mix", "-"),
-                    ]
-                    for row in sorted_data
+            # 每月任務：清空並重寫所有資料（確保產業分類等欄位都是最新的）
+            sorted_data = sorted(data, key=lambda x: x.get("stock_id", ""))
+            rows = [headers] + [
+                [
+                    row.get("stock_id", ""),
+                    row.get("stock_name", ""),
+                    row.get("company_name", row.get("stock_name", "")),
+                    row.get("industry_category", "-"),
+                    row.get("industry_category2", "-"),
+                    row.get("product_mix", "-"),
                 ]
-                worksheet.update(rows, "A1")
-                logger.info(f"公司主檔首次匯出完成: {len(data)} 筆")
-            else:
-                # SPEC: 第二次後採差集後插入
-                # 取得現有股票代號
-                existing_data = worksheet.get_all_values()
-                existing_ids = set()
-                if len(existing_data) > 1:  # 跳過標題列
-                    existing_ids = {row[0] for row in existing_data[1:] if row}
+                for row in sorted_data
+            ]
 
-                # 計算差集（新增的股票）
-                new_stocks = [
-                    row for row in data
-                    if row.get("stock_id", "") not in existing_ids
-                ]
+            # 確保行數足夠
+            required_rows = len(rows) + 10
+            if worksheet.row_count < required_rows:
+                worksheet.add_rows(required_rows - worksheet.row_count)
 
-                if new_stocks:
-                    # 在現有資料後面插入新股票
-                    next_row = len(existing_data) + 1
-                    new_rows = [
-                        [
-                            row.get("stock_id", ""),
-                            row.get("stock_name", ""),
-                            row.get("company_name", row.get("stock_name", "")),
-                            row.get("industry_category", "-"),
-                            row.get("industry_category2", "-"),
-                            row.get("product_mix", "-"),
-                        ]
-                        for row in sorted(new_stocks, key=lambda x: x.get("stock_id", ""))
-                    ]
-
-                    # 檢查並擴展行數（如果需要）
-                    required_rows = next_row + len(new_rows) - 1
-                    if worksheet.row_count < required_rows:
-                        worksheet.add_rows(required_rows - worksheet.row_count + 100)
-                        logger.info(f"分頁行數不足，已擴展至 {required_rows + 100} 行")
-
-                    worksheet.update(new_rows, f"A{next_row}")
-                    logger.info(f"公司主檔差集插入完成: 新增 {len(new_stocks)} 筆")
-                else:
-                    logger.info("公司主檔無新增股票")
+            # 清空並重寫
+            worksheet.clear()
+            worksheet.update(rows, "A1")
+            logger.info(f"公司主檔匯出完成: {len(data)} 筆")
 
             return True
 
