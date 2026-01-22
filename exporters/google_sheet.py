@@ -363,6 +363,10 @@ class GoogleSheetExporter:
             worksheet.update(rows, "A1")
 
             logger.info(f"VCP 篩選結果匯出完成: {len(data)} 筆 -> {tab_name}")
+
+            # 自動排序頁籤（最新日期在前）
+            self.sort_worksheets_by_date(sheet_id)
+
             return True
 
         except gspread.exceptions.APIError as e:
@@ -376,6 +380,7 @@ class GoogleSheetExporter:
                         try:
                             worksheet.update(rows, "A1")
                             logger.info(f"VCP 篩選結果匯出完成: {len(data)} 筆 -> {tab_name}")
+                            self.sort_worksheets_by_date(sheet_id)
                             return True
                         except Exception:
                             continue
@@ -478,6 +483,10 @@ class GoogleSheetExporter:
             worksheet.update(rows, "A1")
 
             logger.info(f"三線開花篩選結果匯出完成: {len(data)} 筆 -> {tab_name}")
+
+            # 自動排序頁籤（最新日期在前）
+            self.sort_worksheets_by_date(sheet_id)
+
             return True
 
         except gspread.exceptions.APIError as e:
@@ -491,6 +500,7 @@ class GoogleSheetExporter:
                         try:
                             worksheet.update(rows, "A1")
                             logger.info(f"三線開花篩選結果匯出完成: {len(data)} 筆 -> {tab_name}")
+                            self.sort_worksheets_by_date(sheet_id)
                             return True
                         except Exception:
                             continue
@@ -673,6 +683,59 @@ class GoogleSheetExporter:
             return False
         except Exception as e:
             logger.error(f"驗證資料匯出失敗: {e}")
+            return False
+
+    def sort_worksheets_by_date(
+        self,
+        sheet_id: str,
+        fixed_tabs: list[str] = None
+    ) -> bool:
+        """
+        按日期排序頁籤（最新的在前面）
+
+        Args:
+            sheet_id: Sheet ID
+            fixed_tabs: 固定在最前面的頁籤名稱列表
+
+        Returns:
+            是否成功
+        """
+        import re
+
+        sheet = self._get_sheet(sheet_id)
+        if not sheet:
+            return False
+
+        try:
+            worksheets = sheet.worksheets()
+            fixed_tabs = fixed_tabs or []
+
+            # 分離固定頁籤和日期頁籤
+            fixed_worksheets = []
+            date_worksheets = []
+
+            for ws in worksheets:
+                if ws.title in fixed_tabs:
+                    fixed_worksheets.append(ws)
+                elif re.match(r"^\d{6}$", ws.title):  # YYMMDD 格式
+                    date_worksheets.append(ws)
+
+            # 日期頁籤按名稱降序排列（最新在前）
+            date_worksheets.sort(key=lambda x: x.title, reverse=True)
+
+            # 重新排序：固定頁籤 + 日期頁籤
+            new_order = fixed_worksheets + date_worksheets
+
+            # 更新每個頁籤的 index
+            for idx, ws in enumerate(new_order):
+                if ws.index != idx:
+                    ws.update_index(idx)
+
+            logger.info(f"頁籤排序完成: {len(new_order)} 個頁籤")
+            return True
+
+        except Exception as e:
+            logger.error(f"頁籤排序失敗: {e}")
             return False
 
     def health_check(self) -> bool:
