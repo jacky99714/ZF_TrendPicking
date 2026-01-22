@@ -22,6 +22,8 @@ on:
 jobs:
   daily-task:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # 需要寫入權限才能建立 Release
 
     steps:
       - name: Checkout repository
