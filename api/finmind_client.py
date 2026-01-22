@@ -244,7 +244,34 @@ class FinMindClient:
         # 合併產業分類列表
         df = df.merge(industry_groups, on="stock_id", how="left")
 
-        # 設定產業分類1和產業分類2
+        # 定義產業優先級（數字越小優先級越高）
+        # 較具體的產業（如「半導體業」）優先於較廣泛的（如「電子工業」）
+        INDUSTRY_PRIORITY = {
+            # 電子相關
+            "半導體業": 1,
+            "電腦及週邊設備業": 2,
+            "光電業": 3,
+            "通信網路業": 4,
+            "電子零組件業": 5,
+            "電子通路業": 6,
+            "資訊服務業": 7,
+            "其他電子業": 8,
+            "電子工業": 9,  # 較廣泛的分類
+            # 生技醫療相關
+            "生技醫療業": 1,
+            "化學工業": 2,
+            "化學生技醫療": 3,  # 較廣泛的分類
+            # 其他（預設優先級）
+        }
+
+        def sort_industries(industry_list):
+            """排序產業分類，較具體的排在前面"""
+            if not industry_list or len(industry_list) <= 1:
+                return industry_list
+            return sorted(industry_list, key=lambda x: INDUSTRY_PRIORITY.get(x, 50))
+
+        # 設定產業分類1和產業分類2（排序後）
+        df["industry_list"] = df["industry_list"].apply(sort_industries)
         df["industry_category"] = df["industry_list"].apply(lambda x: x[0] if x else "-")
         df["industry_category2"] = df["industry_list"].apply(lambda x: x[1] if len(x) > 1 else "-")
 
