@@ -264,11 +264,20 @@ class FinMindClient:
             # 其他（預設優先級）
         }
 
+        # 非產業分類的標籤（板塊類型等），需要過濾掉
+        NON_INDUSTRY_LABELS = {"創新板股票"}
+
         def sort_industries(industry_list):
-            """排序產業分類，較廣泛的排在前面"""
-            if not industry_list or len(industry_list) <= 1:
+            """排序產業分類，較廣泛的排在前面，並過濾非產業標籤"""
+            if not industry_list:
                 return industry_list
-            return sorted(industry_list, key=lambda x: INDUSTRY_PRIORITY.get(x, 50), reverse=True)
+            # 過濾掉非產業標籤
+            filtered = [x for x in industry_list if x not in NON_INDUSTRY_LABELS]
+            if not filtered:
+                return industry_list  # 如果全被過濾掉，保留原始
+            if len(filtered) <= 1:
+                return filtered
+            return sorted(filtered, key=lambda x: INDUSTRY_PRIORITY.get(x, 50), reverse=True)
 
         # 設定產業分類1和產業分類2（排序後）
         df["industry_list"] = df["industry_list"].apply(sort_industries)
