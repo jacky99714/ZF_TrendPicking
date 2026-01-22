@@ -520,6 +520,181 @@ class GoogleSheetExporter:
             logger.error(f"三線開花匯出失敗: {e}")
             return False
 
+    # ==================== 驗證資料匯出 ====================
+
+    def export_verification(
+        self,
+        vcp_data: list[dict],
+        sanxian_data: list[dict],
+        target_date: date,
+        market_return_20d: float = 0.0,
+        sheet_id: Optional[str] = None
+    ) -> bool:
+        """
+        匯出驗證資料（包含所有計算中間欄位）
+
+        Args:
+            vcp_data: VCP 驗證資料列表（包含所有計算欄位）
+            sanxian_data: 三線開花驗證資料列表（包含所有計算欄位）
+            target_date: 篩選日期
+            market_return_20d: 大盤 20 日報酬率
+            sheet_id: Sheet ID
+
+        Returns:
+            是否成功
+        """
+        sheet_id = sheet_id or SHEET_IDS.get("verification")
+        if not sheet_id:
+            logger.error("未設定驗證 Sheet ID")
+            return False
+
+        sheet = self._get_sheet(sheet_id)
+        if not sheet:
+            return False
+
+        try:
+            tab_name = self._format_date_tab(target_date)
+
+            # 建立新分頁
+            try:
+                existing = sheet.worksheet(tab_name)
+                sheet.del_worksheet(existing)
+            except gspread.WorksheetNotFound:
+                pass
+
+            # 計算總行數（VCP + 間隔 + 三線開花）
+            total_rows = max(len(vcp_data) + len(sanxian_data) + 10, 100)
+
+            worksheet = sheet.add_worksheet(
+                title=tab_name,
+                rows=total_rows,
+                cols=25,
+                index=1
+            )
+
+            current_row = 1
+
+            # ========== VCP 驗證區塊 ==========
+            vcp_title = [[f"=== VCP 驗證資料 ({target_date}) === 大盤20日報酬: {market_return_20d:.4f}"]]
+            worksheet.update(vcp_title, f"A{current_row}")
+            current_row += 1
+
+            vcp_headers = [
+                "stock_id", "date", "close_price", "high_price",
+                "ma50", "ma150", "ma200", "ma200_slope_20d",
+                "return_20d", "high_5d", "high_252d", "gap_to_52w_high",
+                "cond1_close>ma50", "cond2_ma50>ma150", "cond3_ma150>ma200",
+                "cond4_ma200_up", "cond5_beat_market",
+                "is_strong", "is_new_high", "is_vcp"
+            ]
+            worksheet.update([vcp_headers], f"A{current_row}")
+            current_row += 1
+
+            if vcp_data:
+                def safe_val(val):
+                    """安全格式化數值"""
+                    if val is None:
+                        return ""
+                    if isinstance(val, bool):
+                        return "O" if val else ""
+                    if isinstance(val, float):
+                        if pd.isna(val):
+                            return ""
+                        return round(val, 4)
+                    return str(val)
+
+                vcp_rows = []
+                for row in vcp_data:
+                    vcp_rows.append([
+                        safe_val(row.get("stock_id")),
+                        str(row.get("date", "")),
+                        safe_val(row.get("close_price")),
+                        safe_val(row.get("high_price")),
+                        safe_val(row.get("ma50")),
+                        safe_val(row.get("ma150")),
+                        safe_val(row.get("ma200")),
+                        safe_val(row.get("ma200_slope_20d")),
+                        safe_val(row.get("return_20d")),
+                        safe_val(row.get("high_5d")),
+                        safe_val(row.get("high_252d")),
+                        safe_val(row.get("gap_to_52w_high")),
+                        safe_val(row.get("cond1")),
+                        safe_val(row.get("cond2")),
+                        safe_val(row.get("cond3")),
+                        safe_val(row.get("cond4")),
+                        safe_val(row.get("cond5")),
+                        safe_val(row.get("is_strong")),
+                        safe_val(row.get("is_new_high")),
+                        safe_val(row.get("is_vcp")),
+                    ])
+
+                worksheet.update(vcp_rows, f"A{current_row}")
+                current_row += len(vcp_rows)
+
+            logger.info(f"VCP 驗證資料匯出完成: {len(vcp_data)} 筆")
+
+            # 間隔
+            current_row += 3
+
+            # ========== 三線開花驗證區塊 ==========
+            sanxian_title = [[f"=== 三線開花驗證資料 ({target_date}) ==="]]
+            worksheet.update(sanxian_title, f"A{current_row}")
+            current_row += 1
+
+            sanxian_headers = [
+                "stock_id", "date", "close_price",
+                "ma8", "ma21", "ma55",
+                "high_55d", "second_high_55d", "gap_ratio",
+                "cond1_close>ma8", "cond2_ma8>ma21", "cond3_ma21>ma55",
+                "cond4_new_high", "is_sanxian"
+            ]
+            worksheet.update([sanxian_headers], f"A{current_row}")
+            current_row += 1
+
+            if sanxian_data:
+                sanxian_rows = []
+                for row in sanxian_data:
+                    sanxian_rows.append([
+                        safe_val(row.get("stock_id")),
+                        str(row.get("date", "")),
+                        safe_val(row.get("close_price")),
+                        safe_val(row.get("ma8")),
+                        safe_val(row.get("ma21")),
+                        safe_val(row.get("ma55")),
+                        safe_val(row.get("high_55d")),
+                        safe_val(row.get("second_high_55d")),
+                        safe_val(row.get("gap_ratio")),
+                        safe_val(row.get("cond1")),
+                        safe_val(row.get("cond2")),
+                        safe_val(row.get("cond3")),
+                        safe_val(row.get("cond4")),
+                        safe_val(row.get("is_sanxian")),
+                    ])
+
+                worksheet.update(sanxian_rows, f"A{current_row}")
+
+            logger.info(f"三線開花驗證資料匯出完成: {len(sanxian_data)} 筆 -> {tab_name}")
+            return True
+
+        except gspread.exceptions.APIError as e:
+            if "RATE_LIMIT_EXCEEDED" in str(e) or "429" in str(e):
+                for retry in range(GSHEET_MAX_RETRIES):
+                    logger.warning(f"Google API 限流，{GSHEET_RETRY_DELAY} 秒後重試 ({retry + 1}/{GSHEET_MAX_RETRIES})...")
+                    time.sleep(GSHEET_RETRY_DELAY * (retry + 1))
+                    try:
+                        # 重試匯出
+                        return self.export_verification(
+                            vcp_data, sanxian_data, target_date,
+                            market_return_20d, sheet_id
+                        )
+                    except Exception:
+                        continue
+            logger.error(f"驗證資料匯出失敗: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"驗證資料匯出失敗: {e}")
+            return False
+
     def health_check(self) -> bool:
         """檢查 Google Sheets 連線狀態"""
         return self.client is not None

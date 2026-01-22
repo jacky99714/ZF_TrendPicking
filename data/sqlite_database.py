@@ -200,20 +200,24 @@ class SQLiteDatabase:
 
         total_count = len(df)
 
-        # 使用批次 SQL 提升效能
+        # 按日期分批處理，避免跨日期刪除資料
+        # 修正：原本的邏輯會刪除「所有日期 x 所有股票」的笛卡爾積
+        # 現在改為每個日期獨立處理，只刪除該日期中即將插入的股票
         with self.get_session() as session:
-            # 先刪除已存在的資料
-            dates = df["date"].unique().tolist()
-            stock_ids = df["stock_id"].unique().tolist()
+            for target_date in df["date"].unique():
+                # 取得該日期的資料
+                day_df = df[df["date"] == target_date]
+                day_stock_ids = day_df["stock_id"].unique().tolist()
 
-            session.query(DailyPrice).filter(
-                DailyPrice.date.in_(dates),
-                DailyPrice.stock_id.in_(stock_ids)
-            ).delete(synchronize_session=False)
+                # 只刪除該日期中即將插入的股票資料
+                session.query(DailyPrice).filter(
+                    DailyPrice.date == target_date,
+                    DailyPrice.stock_id.in_(day_stock_ids)
+                ).delete(synchronize_session=False)
 
-            # 批次插入
-            records = df.to_dict("records")
-            session.bulk_insert_mappings(DailyPrice, records)
+                # 插入該日期的資料
+                records = day_df.to_dict("records")
+                session.bulk_insert_mappings(DailyPrice, records)
 
         logger.info(f"寫入/更新 {total_count} 筆股價資料")
         return total_count
