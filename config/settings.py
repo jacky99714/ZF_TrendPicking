@@ -1,6 +1,7 @@
 """
 藏鋒系統設定檔
-支援 GitHub Actions + SQLite + yfinance 架構
+支援 GitHub Actions + SQLite + HybridClient 架構
+（HybridClient = FinMind 股票清單 + yfinance 股價資料）
 """
 import os
 from pathlib import Path
@@ -27,11 +28,11 @@ DATABASE_URL = os.getenv(
 )
 
 # ==================== API 設定 ====================
-# FinMind API 設定（保留但不再使用）
+# FinMind API 設定
 FINMIND_API_URL = "https://api.finmindtrade.com/api/v4/data"
 FINMIND_TOKEN = os.getenv("FINMIND_TOKEN", "")
 
-# API 限流設定（yfinance 無限制，但保留設定以便未來擴展）
+# API 限流設定（FinMind 免費 600 次/小時）
 API_CALLS_PER_HOUR = 600
 
 # ==================== Google Sheet 設定 ====================
@@ -46,6 +47,7 @@ SHEET_IDS = {
     "us_vcp": os.getenv("SHEET_ID_US_VCP", ""),  # 暫不使用
     "tw_sanxian": os.getenv("SHEET_ID_TW_SANXIAN", ""),
     "us_sanxian": os.getenv("SHEET_ID_US_SANXIAN", ""),  # 暫不使用
+    "verification": os.getenv("SHEET_ID_VERIFICATION", ""),
 }
 
 # ==================== 技術指標參數 ====================
@@ -62,7 +64,7 @@ VCP_PARAMS = {
     "ma200_period": 200,
     "lookback_20d": 20,
     "lookback_52w": 252,    # 52週約252個交易日
-    "new_high_tolerance": 0.01,  # 1% 容差
+    "new_high_tolerance": 0.10,  # 10% 容差
 }
 
 # 三線開花篩選參數

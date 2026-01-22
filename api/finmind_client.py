@@ -215,6 +215,21 @@ class FinMindClient:
         if index_filtered > 0:
             logger.info(f"已過濾 {index_filtered} 檔指數/權證/非股票資料")
 
+        # 過濾已下市股票
+        # date 欄位表示資料更新日期，已下市股票的 date 會停留在下市日期
+        # 只保留 date 為最近日期的股票（仍在交易中）
+        if "date" in df.columns:
+            before_delist_filter = len(df)
+            # 轉換日期格式
+            df["date"] = pd.to_datetime(df["date"])
+            # 找出最新的日期
+            latest_date = df["date"].max()
+            # 只保留最新日期的股票（正常交易中的股票）
+            df = df[df["date"] == latest_date]
+            delist_filtered = before_delist_filter - len(df)
+            if delist_filtered > 0:
+                logger.info(f"已過濾 {delist_filtered} 檔已下市/停牌股票")
+
         # 去除重複的 stock_id（保留第一筆）
         before_dedup = len(df)
         df = df.drop_duplicates(subset=["stock_id"], keep="first")
@@ -229,7 +244,9 @@ class FinMindClient:
         self,
         start_date: date,
         end_date: Optional[date] = None,
-        stock_id: Optional[str] = None
+        stock_ids: Optional[list[str]] = None,
+        market_types: Optional[dict[str, str]] = None,
+        retry_count: int = 3,
     ) -> pd.DataFrame:
         """
         取得股票每日股價
@@ -237,7 +254,9 @@ class FinMindClient:
         Args:
             start_date: 開始日期
             end_date: 結束日期（預設為 start_date）
-            stock_id: 指定股票代號（可選，不指定則取得全部）
+            stock_ids: 股票代號列表（可選，不指定則取得全部）
+            market_types: 市場類型字典（忽略，FinMind 不需要）
+            retry_count: 重試次數（已由 RetryHandler 處理）
 
         Returns:
             DataFrame with columns:
@@ -257,19 +276,14 @@ class FinMindClient:
             logger.warning(f"日期範圍錯誤: start_date ({start_date}) > end_date ({end_date})，自動交換")
             start_date, end_date = end_date, start_date
 
-        logger.info(
-            f"取得股價資料: {start_date} ~ {end_date}"
-            + (f", 股票: {stock_id}" if stock_id else " (全部)")
-        )
+        stock_count = len(stock_ids) if stock_ids else "全部"
+        logger.info(f"取得股價資料: {start_date} ~ {end_date}, 共 {stock_count} 檔")
 
         params = {
             "dataset": "TaiwanStockPrice",
             "start_date": start_date.strftime("%Y-%m-%d"),
             "end_date": end_date.strftime("%Y-%m-%d"),
         }
-
-        if stock_id:
-            params["data_id"] = stock_id
 
         data = self._make_request(params)
 
@@ -298,13 +312,18 @@ class FinMindClient:
         # 轉換日期
         df["date"] = pd.to_datetime(df["date"]).dt.date
 
+        # 如果有指定股票清單，過濾結果
+        if stock_ids:
+            df = df[df["stock_id"].isin(stock_ids)]
+
         logger.info(f"取得 {len(df)} 筆股價資料")
         return df
 
     def get_market_index(
         self,
         start_date: date,
-        end_date: Optional[date] = None
+        end_date: Optional[date] = None,
+        retry_count: int = 3,
     ) -> pd.DataFrame:
         """
         取得大盤指數 (加權指數)
@@ -312,6 +331,7 @@ class FinMindClient:
         Args:
             start_date: 開始日期
             end_date: 結束日期
+            retry_count: 重試次數（已由 RetryHandler 處理）
 
         Returns:
             DataFrame with columns:
@@ -328,13 +348,26 @@ class FinMindClient:
 
         logger.info(f"取得大盤指數: {start_date} ~ {end_date}")
 
+        # 使用 TaiwanStockPrice 取得 TAIEX 指數
+        # 備選方案：TaiwanStockTotalReturnIndex
         params = {
-            "dataset": "TaiwanStockTotalReturnIndex",
+            "dataset": "TaiwanStockPrice",
+            "data_id": "TAIEX",
             "start_date": start_date.strftime("%Y-%m-%d"),
             "end_date": end_date.strftime("%Y-%m-%d"),
         }
 
-        data = self._make_request(params)
+        try:
+            data = self._make_request(params)
+        except FinMindError:
+            # 如果 TaiwanStockPrice 沒有 TAIEX，嘗試用報酬指數
+            logger.info("嘗試使用 TaiwanStockTotalReturnIndex...")
+            params = {
+                "dataset": "TaiwanStockTotalReturnIndex",
+                "start_date": start_date.strftime("%Y-%m-%d"),
+                "end_date": end_date.strftime("%Y-%m-%d"),
+            }
+            data = self._make_request(params)
 
         # 安全取得 data 欄位
         raw_data = data.get("data", [])
@@ -344,25 +377,21 @@ class FinMindClient:
 
         df = pd.DataFrame(raw_data)
 
-        # 檢查必要欄位是否存在
-        required_cols = ["stock_id", "date", "price"]
-        missing_cols = [c for c in required_cols if c not in df.columns]
-        if missing_cols:
-            logger.warning(f"大盤指數資料缺少欄位: {missing_cols}")
-            return pd.DataFrame()
+        # 根據資料來源處理欄位
+        if "close" in df.columns:
+            # TaiwanStockPrice 格式
+            df = df.rename(columns={"close": "taiex"})
+        elif "price" in df.columns:
+            # TaiwanStockTotalReturnIndex 格式
+            df = df[df["stock_id"] == "TAIEX"]
+            df = df.rename(columns={"price": "taiex"})
 
-        # 過濾只要加權報酬指數
-        df = df[df["stock_id"] == "TAIEX"]
-
-        if df.empty:
+        if df.empty or "taiex" not in df.columns:
             logger.warning("無 TAIEX 指數資料")
             return pd.DataFrame()
 
         # 轉換日期
         df["date"] = pd.to_datetime(df["date"]).dt.date
-
-        # 重新命名
-        df = df.rename(columns={"price": "taiex"})
         df = df[["date", "taiex"]]
 
         logger.info(f"取得 {len(df)} 筆大盤指數")

@@ -1,13 +1,14 @@
 """
 每日任務
-使用 yfinance + SQLite 架構
+使用 HybridClient (FinMind + yfinance) + SQLite 架構
 """
 from datetime import date, timedelta
 from typing import Optional
 
+import pandas as pd
 from loguru import logger
 
-from api.yfinance_client import YFinanceClient
+from api.hybrid_client import HybridClient
 from data.sqlite_database import SQLiteDatabase
 from calculators.vcp_filter import VCPFilter, calculate_market_return
 from calculators.sanxian_filter import SanxianFilter
@@ -30,7 +31,7 @@ class DailyTask:
 
     def __init__(
         self,
-        client: Optional[YFinanceClient] = None,
+        client: Optional[HybridClient] = None,
         db: Optional[SQLiteDatabase] = None,
         exporter: Optional[GoogleSheetExporter] = None
     ):
@@ -38,11 +39,11 @@ class DailyTask:
         初始化每日任務
 
         Args:
-            client: yfinance API 客戶端
+            client: HybridClient API 客戶端
             db: SQLite 資料庫連線
             exporter: Google Sheet 匯出器
         """
-        self.client = client or YFinanceClient()
+        self.client = client or HybridClient()
         self.db = db or SQLiteDatabase()
         self.exporter = exporter or GoogleSheetExporter()
 
@@ -133,12 +134,12 @@ class DailyTask:
                 logger.warning("無大盤指數資料，VCP 篩選可能不準確")
 
             # Step 4: 執行篩選
-            vcp_results, sanxian_results = self._run_filters(target_date)
+            vcp_results, sanxian_results, market_return = self._run_filters(target_date)
             result["vcp_count"] = len(vcp_results)
             result["sanxian_count"] = len(sanxian_results)
 
-            # Step 5: 匯出至 Google Sheet
-            self._export_to_sheet(target_date, vcp_results, sanxian_results)
+            # Step 5: 匯出至 Google Sheet（包含驗證資料）
+            self._export_to_sheet(target_date, vcp_results, sanxian_results, market_return)
 
             result["success"] = True
             logger.info(
@@ -193,8 +194,12 @@ class DailyTask:
         count = self.db.upsert_market_index(market_df)
         return count
 
-    def _run_filters(self, target_date: date) -> tuple[list[dict], list[dict]]:
-        """執行篩選"""
+    def _run_filters(self, target_date: date) -> tuple[list[dict], list[dict], float]:
+        """執行篩選
+
+        Returns:
+            (vcp_results, sanxian_results, market_return_20d)
+        """
         logger.info("執行篩選...")
 
         # 取得計算所需的歷史資料（252 天）
@@ -204,7 +209,7 @@ class DailyTask:
 
         if price_df.empty:
             logger.warning("無足夠歷史資料")
-            return [], []
+            return [], [], 0.0
 
         # 計算大盤報酬率
         market_return = calculate_market_return(market_df, target_date, lookback=20)
@@ -227,7 +232,15 @@ class DailyTask:
         self.db.save_filter_results(vcp_results, "vcp", target_date)
         self.db.save_filter_results(sanxian_results, "sanxian", target_date)
 
-        return vcp_results, sanxian_results
+        # 準備驗證資料
+        self._vcp_verification_data = self._prepare_vcp_verification(
+            price_df, market_return, target_date
+        )
+        self._sanxian_verification_data = self._prepare_sanxian_verification(
+            price_df, target_date
+        )
+
+        return vcp_results, sanxian_results, market_return
 
     def _enrich_results(
         self,
@@ -255,11 +268,114 @@ class DailyTask:
 
         return results
 
+    def _prepare_vcp_verification(
+        self,
+        price_df: pd.DataFrame,
+        market_return: float,
+        target_date: date
+    ) -> list[dict]:
+        """
+        準備 VCP 驗證資料（包含所有計算欄位）
+        """
+        from calculators.moving_average import MovingAverageCalculator
+
+        if price_df.empty:
+            return []
+
+        # 準備計算資料
+        df = MovingAverageCalculator.prepare_vcp_data(price_df)
+        if df.empty:
+            return []
+
+        # 取得目標日期的資料
+        df["date"] = pd.to_datetime(df["date"]).dt.date
+        df = df[df["date"] == target_date].copy()
+
+        if df.empty:
+            return []
+
+        # 計算所有條件
+        close = df["close_price"].fillna(0)
+        ma50 = df["ma50"].fillna(float("inf"))
+        ma150 = df["ma150"].fillna(float("inf"))
+        ma200 = df["ma200"].fillna(float("inf"))
+
+        df["cond1"] = close > ma50
+        df["cond2"] = ma50 > ma150
+        df["cond3"] = ma150 > ma200
+        df["cond4"] = df["ma200_slope_20d"].fillna(-1) > 0
+        df["cond5"] = df["return_20d"].fillna(-float("inf")) > market_return
+
+        # 強勢清單
+        df["is_strong"] = df["cond1"] & df["cond2"] & df["cond3"] & df["cond4"] & df["cond5"]
+
+        # 新高清單
+        high_5d = df["high_5d"].fillna(0)
+        high_252d = df["high_252d"].fillna(1).replace(0, 1)
+        df["gap_to_52w_high"] = abs(high_5d / high_252d - 1)
+        df["is_new_high"] = (df["gap_to_52w_high"] <= self.vcp_filter.new_high_tolerance) & df["cond5"]
+
+        # VCP = 強勢 OR 新高
+        df["is_vcp"] = df["is_strong"] | df["is_new_high"]
+
+        # 只保留 VCP 結果供驗證
+        result_df = df[df["is_vcp"]].copy()
+
+        return result_df.to_dict("records")
+
+    def _prepare_sanxian_verification(
+        self,
+        price_df: pd.DataFrame,
+        target_date: date
+    ) -> list[dict]:
+        """
+        準備三線開花驗證資料（包含所有計算欄位）
+        """
+        from calculators.moving_average import MovingAverageCalculator
+
+        if price_df.empty:
+            return []
+
+        # 準備計算資料
+        df = MovingAverageCalculator.prepare_sanxian_data(price_df)
+        if df.empty:
+            return []
+
+        # 取得目標日期的資料
+        df["date"] = pd.to_datetime(df["date"]).dt.date
+        df = df[df["date"] == target_date].copy()
+
+        if df.empty:
+            return []
+
+        # 計算所有條件
+        close = df["close_price"].fillna(0)
+        ma8 = df["ma8"].fillna(float("inf"))
+        ma21 = df["ma21"].fillna(float("inf"))
+        ma55 = df["ma55"].fillna(float("inf"))
+
+        df["cond1"] = close > ma8
+        df["cond2"] = ma8 > ma21
+        df["cond3"] = ma21 > ma55
+        df["cond4"] = close >= df["high_55d"].fillna(float("inf"))
+
+        df["is_sanxian"] = df["cond1"] & df["cond2"] & df["cond3"] & df["cond4"]
+
+        # 計算差距比例
+        second_high = df["second_high_55d"].fillna(1).replace(0, 1)
+        df["gap_ratio"] = (close / second_high - 1)
+
+        # 只保留三線開花結果供驗證
+        result_df = df[df["is_sanxian"]].copy()
+
+        return result_df.to_dict("records")
+
     def _export_to_sheet(
         self,
         target_date: date,
         vcp_results: list[dict],
-        sanxian_results: list[dict]
+        sanxian_results: list[dict],
+        market_return: float = 0.0
     ):
         """匯出至 Google Sheet"""
         if not self.exporter.health_check():
@@ -273,6 +389,18 @@ class DailyTask:
         # 匯出三線開花
         if sanxian_results:
             self.exporter.export_sanxian(sanxian_results, target_date)
+
+        # 匯出驗證資料
+        vcp_verification = getattr(self, "_vcp_verification_data", [])
+        sanxian_verification = getattr(self, "_sanxian_verification_data", [])
+
+        if vcp_verification or sanxian_verification:
+            self.exporter.export_verification(
+                vcp_verification,
+                sanxian_verification,
+                target_date,
+                market_return
+            )
 
 
 def run_daily_task(target_date: Optional[date] = None) -> dict:

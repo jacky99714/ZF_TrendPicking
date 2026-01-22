@@ -41,7 +41,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from config.settings import LOG_CONFIG, SCHEDULE_CONFIG
-from api.yfinance_client import YFinanceClient
+from api.hybrid_client import HybridClient
 from data.sqlite_database import SQLiteDatabase
 from exporters.google_sheet import GoogleSheetExporter
 from tasks.daily_task import DailyTask, run_daily_task
@@ -75,7 +75,7 @@ def cmd_init():
 
     # 初始化元件
     db = SQLiteDatabase()
-    client = YFinanceClient()
+    client = HybridClient()
 
     # 建立資料表
     logger.info("建立資料表...")
@@ -210,9 +210,9 @@ def cmd_health():
     sheet_ok = exporter.health_check()
     logger.info(f"Google Sheet: {'✓ 正常' if sheet_ok else '✗ 未連線'}")
 
-    # API 檢查（yfinance 免費無限制）
+    # API 檢查（HybridClient）
     try:
-        client = YFinanceClient()
+        client = HybridClient()
         # 嘗試取得少量資料
         df = client.get_stock_info()
         api_ok = not df.empty
@@ -220,7 +220,7 @@ def cmd_health():
         api_ok = False
         logger.error(f"API 檢查失敗: {e}")
 
-    logger.info(f"yfinance API: {'✓ 正常' if api_ok else '✗ 異常'}")
+    logger.info(f"HybridClient API: {'✓ 正常' if api_ok else '✗ 異常'}")
 
     # 總結
     all_ok = db_ok and api_ok
@@ -239,7 +239,7 @@ def cmd_backfill(days: int = 30):
     logger.info(f"=== 補齊 {days} 天歷史資料 ===")
 
     db = SQLiteDatabase()
-    client = YFinanceClient()
+    client = HybridClient()
 
     end_date = date.today()
     start_date = end_date - timedelta(days=days)

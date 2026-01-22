@@ -1,13 +1,13 @@
 """
 每月任務
-使用 yfinance + SQLite 架構
+使用 HybridClient (FinMind + yfinance) + SQLite 架構
 """
 from datetime import date
 from typing import Optional
 
 from loguru import logger
 
-from api.yfinance_client import YFinanceClient
+from api.hybrid_client import HybridClient
 from data.sqlite_database import SQLiteDatabase
 from exporters.google_sheet import GoogleSheetExporter
 
@@ -24,7 +24,7 @@ class MonthlyTask:
 
     def __init__(
         self,
-        client: Optional[YFinanceClient] = None,
+        client: Optional[HybridClient] = None,
         db: Optional[SQLiteDatabase] = None,
         exporter: Optional[GoogleSheetExporter] = None
     ):
@@ -32,11 +32,11 @@ class MonthlyTask:
         初始化每月任務
 
         Args:
-            client: yfinance API 客戶端
+            client: HybridClient API 客戶端
             db: SQLite 資料庫連線
             exporter: Google Sheet 匯出器
         """
-        self.client = client or YFinanceClient()
+        self.client = client or HybridClient()
         self.db = db or SQLiteDatabase()
         self.exporter = exporter or GoogleSheetExporter()
 

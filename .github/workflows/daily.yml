@@ -38,7 +38,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Download database artifact
+      # 優先從 GitHub Release 下載資料庫（永久保存）
+      - name: Download database from Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p data
+          echo "嘗試從 Release 下載資料庫..."
+          if gh release download db-backup -p "zf_trend.db" -D data/ 2>/dev/null; then
+            echo "✅ 從 Release 下載成功"
+            ls -la data/
+          else
+            echo "⚠️ Release 中沒有資料庫，嘗試 Artifact..."
+          fi
+        continue-on-error: true
+
+      # 備援：從 Artifact 下載（90 天內有效）
+      - name: Download database from Artifact
+        if: ${{ hashFiles('data/zf_trend.db') == '' }}
         uses: dawidd6/action-download-artifact@v3
         with:
           name: sqlite-database
@@ -52,20 +69,25 @@ jobs:
           echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > credentials.json
 
       - name: Initialize system if needed
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
         run: |
           if [ ! -f "data/zf_trend.db" ]; then
             echo "資料庫不存在，執行初始化..."
             python main.py init
           else
             echo "資料庫已存在，跳過初始化"
+            ls -la data/
           fi
 
       - name: Run daily task
         env:
           GOOGLE_CREDENTIALS_PATH: credentials.json
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
           SHEET_ID_COMPANY_MASTER: ${{ secrets.SHEET_ID_COMPANY_MASTER }}
           SHEET_ID_TW_VCP: ${{ secrets.SHEET_ID_TW_VCP }}
           SHEET_ID_TW_SANXIAN: ${{ secrets.SHEET_ID_TW_SANXIAN }}
+          SHEET_ID_VERIFICATION: ${{ secrets.SHEET_ID_VERIFICATION }}
         run: |
           if [ "${{ github.event.inputs.target_date }}" != "" ]; then
             if [ "${{ github.event.inputs.force }}" == "true" ]; then
@@ -81,6 +103,22 @@ jobs:
             fi
           fi
 
+      # 備份到 GitHub Release（永久保存）
+      - name: Backup database to Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "備份資料庫到 Release..."
+          # 建立 release（如果不存在）
+          gh release create db-backup \
+            --title "Database Backup" \
+            --notes "SQLite 資料庫自動備份 (永久保存)" \
+            2>/dev/null || true
+          # 上傳資料庫（覆蓋舊檔）
+          gh release upload db-backup data/zf_trend.db --clobber
+          echo "✅ 備份完成"
+
+      # 同時保存到 Artifact（方便快速存取）
       - name: Upload database artifact
         uses: actions/upload-artifact@v4
         with:
