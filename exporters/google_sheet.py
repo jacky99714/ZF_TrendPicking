@@ -167,6 +167,13 @@ class GoogleSheetExporter:
                         ]
                         for row in sorted(new_stocks, key=lambda x: x.get("stock_id", ""))
                     ]
+
+                    # 檢查並擴展行數（如果需要）
+                    required_rows = next_row + len(new_rows) - 1
+                    if worksheet.row_count < required_rows:
+                        worksheet.add_rows(required_rows - worksheet.row_count + 100)
+                        logger.info(f"分頁行數不足，已擴展至 {required_rows + 100} 行")
+
                     worksheet.update(new_rows, f"A{next_row}")
                     logger.info(f"公司主檔差集插入完成: 新增 {len(new_stocks)} 筆")
                 else:
