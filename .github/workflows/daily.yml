@@ -115,11 +115,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "備份資料庫到 Release..."
-          # 建立 release（如果不存在）
-          gh release create db-backup \
-            --title "Database Backup" \
-            --notes "SQLite 資料庫自動備份 (永久保存)" \
-            2>/dev/null || true
+          # 檢查 release 是否存在，不存在則建立
+          if ! gh release view db-backup &>/dev/null; then
+            echo "建立新的 Release..."
+            gh release create db-backup \
+              --title "Database Backup" \
+              --notes "SQLite 資料庫自動備份 (永久保存)"
+          fi
           # 上傳資料庫（覆蓋舊檔）
           gh release upload db-backup data/zf_trend.db --clobber
           echo "✅ 備份完成"
