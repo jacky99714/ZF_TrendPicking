@@ -220,6 +220,13 @@ class DailyTask:
         if not stock_info:
             logger.warning("股票基本資料為空，請先執行 'python main.py init'")
 
+        # 只保留 stock_info 中的股票（過濾掉 ETF、權證等）
+        valid_stock_ids = set(stock_info.keys())
+        before_filter = price_df["stock_id"].nunique()
+        price_df = price_df[price_df["stock_id"].isin(valid_stock_ids)]
+        after_filter = price_df["stock_id"].nunique()
+        logger.info(f"過濾股票: {before_filter} -> {after_filter} 檔（排除 ETF/權證）")
+
         # VCP 篩選
         vcp_df = self.vcp_filter.filter(price_df, market_return, target_date)
         vcp_results = self._enrich_results(vcp_df, stock_info)
