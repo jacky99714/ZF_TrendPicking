@@ -76,8 +76,8 @@ class MovingAverageCalculator:
         df = df.sort_values(["stock_id", "date"])
 
         for period in periods:
-            # 至少需要 period/2 天資料才算有效，避免新上市股票誤判
-            min_required = max(period // 2, 1)
+            # 有多少資料就算多少，不足 52 週就用現有資料的最高/最低
+            min_required = 1
 
             # 最高價
             high_col = f"high_{period}d"
