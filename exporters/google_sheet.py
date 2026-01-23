@@ -6,6 +6,7 @@ from datetime import date, datetime
 from typing import Optional
 
 import gspread
+import numpy as np
 import pandas as pd
 from google.oauth2.service_account import Credentials
 from loguru import logger
@@ -330,7 +331,7 @@ class GoogleSheetExporter:
             # 資料列（處理 NaN/inf 值）
             def safe_return(val):
                 """安全格式化報酬率"""
-                if val is None or (isinstance(val, float) and (pd.isna(val) or pd.isinf(val))):
+                if val is None or (isinstance(val, float) and (pd.isna(val) or np.isinf(val))):
                     return "-"
                 return f"{val * 100:.2f}%"
 
@@ -444,13 +445,13 @@ class GoogleSheetExporter:
             # 資料列（處理 NaN/inf 值）
             def safe_price(val):
                 """安全格式化價格"""
-                if val is None or (isinstance(val, float) and (pd.isna(val) or pd.isinf(val))):
+                if val is None or (isinstance(val, float) and (pd.isna(val) or np.isinf(val))):
                     return "-"
                 return f"{val:.2f}"
 
             def safe_ratio(val):
                 """安全格式化比例"""
-                if val is None or (isinstance(val, float) and (pd.isna(val) or pd.isinf(val))):
+                if val is None or (isinstance(val, float) and (pd.isna(val) or np.isinf(val))):
                     return "-"
                 return f"{val * 100:.2f}%"
 
@@ -588,7 +589,7 @@ class GoogleSheetExporter:
                     if isinstance(val, bool):
                         return "O" if val else ""
                     if isinstance(val, float):
-                        if pd.isna(val) or pd.isinf(val):
+                        if pd.isna(val) or np.isinf(val):
                             return ""
                         return round(val, 4)
                     return str(val)
