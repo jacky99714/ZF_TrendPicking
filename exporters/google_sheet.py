@@ -327,10 +327,10 @@ class GoogleSheetExporter:
                 "產品組合", "近20日股價漲幅", "強勢清單", "新高清單"
             ]
 
-            # 資料列（處理 NaN 值）
+            # 資料列（處理 NaN/inf 值）
             def safe_return(val):
                 """安全格式化報酬率"""
-                if val is None or (isinstance(val, float) and pd.isna(val)):
+                if val is None or (isinstance(val, float) and (pd.isna(val) or pd.isinf(val))):
                     return "-"
                 return f"{val * 100:.2f}%"
 
@@ -441,16 +441,16 @@ class GoogleSheetExporter:
                 "產品組合", "今日股價", "55日內次高價", "差距比例"
             ]
 
-            # 資料列（處理 NaN 值）
+            # 資料列（處理 NaN/inf 值）
             def safe_price(val):
                 """安全格式化價格"""
-                if val is None or (isinstance(val, float) and pd.isna(val)):
+                if val is None or (isinstance(val, float) and (pd.isna(val) or pd.isinf(val))):
                     return "-"
                 return f"{val:.2f}"
 
             def safe_ratio(val):
                 """安全格式化比例"""
-                if val is None or (isinstance(val, float) and pd.isna(val)):
+                if val is None or (isinstance(val, float) and (pd.isna(val) or pd.isinf(val))):
                     return "-"
                 return f"{val * 100:.2f}%"
 
@@ -582,13 +582,13 @@ class GoogleSheetExporter:
 
             if vcp_data:
                 def safe_val(val):
-                    """安全格式化數值"""
+                    """安全格式化數值（處理 NaN/inf）"""
                     if val is None:
                         return ""
                     if isinstance(val, bool):
                         return "O" if val else ""
                     if isinstance(val, float):
-                        if pd.isna(val):
+                        if pd.isna(val) or pd.isinf(val):
                             return ""
                         return round(val, 4)
                     return str(val)
