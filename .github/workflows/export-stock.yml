@@ -37,14 +37,16 @@ jobs:
         run: |
           mkdir -p data
           echo "從 Release 下載資料庫..."
-          # 優先下載未壓縮版（最新）
-          if gh release download db-backup -p "zf_trend.db" -D data/ 2>/dev/null; then
-            echo "✅ 從 Release 下載成功"
+          if gh release download db-backup -p "zf_trend_full.db.gz" -D /tmp/ 2>/dev/null; then
+            echo "解壓縮資料庫..."
+            gunzip -c /tmp/zf_trend_full.db.gz > data/zf_trend.db
+            rm /tmp/zf_trend_full.db.gz
+            echo "✅ 從壓縮檔還原成功"
           else
             echo "❌ 無法下載資料庫"
             exit 1
           fi
-          ls -la data/
+          ls -lh data/zf_trend.db
 
       - name: Set up Google credentials
         env:

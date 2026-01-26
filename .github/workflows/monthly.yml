@@ -38,9 +38,12 @@ jobs:
         run: |
           mkdir -p data
           echo "嘗試從 Release 下載資料庫..."
-          if gh release download db-backup -p "zf_trend.db" -D data/ 2>/dev/null; then
-            echo "✅ 從 Release 下載成功"
-            ls -la data/
+          if gh release download db-backup -p "zf_trend_full.db.gz" -D /tmp/ 2>/dev/null; then
+            echo "解壓縮資料庫..."
+            gunzip -c /tmp/zf_trend_full.db.gz > data/zf_trend.db
+            rm /tmp/zf_trend_full.db.gz
+            echo "✅ 從壓縮檔還原成功"
+            ls -lh data/zf_trend.db
           else
             echo "⚠️ Release 中沒有資料庫，嘗試 Artifact..."
           fi
@@ -100,8 +103,10 @@ jobs:
               --title "Database Backup" \
               --notes "SQLite 資料庫自動備份 (永久保存)"
           fi
-          # 上傳資料庫（覆蓋舊檔）
-          gh release upload db-backup data/zf_trend.db --clobber
+          # 壓縮並上傳資料庫（覆蓋舊檔）
+          echo "壓縮資料庫..."
+          gzip -c data/zf_trend.db > /tmp/zf_trend_full.db.gz
+          gh release upload db-backup /tmp/zf_trend_full.db.gz --clobber
           echo "✅ 備份完成"
 
       # 同時保存到 Artifact（方便快速存取）
