@@ -37,13 +37,8 @@ jobs:
         run: |
           mkdir -p data
           echo "從 Release 下載資料庫..."
-          # 嘗試下載壓縮版
-          if gh release download db-backup -p "zf_trend_*.db.gz" -D data/ 2>/dev/null; then
-            echo "解壓縮資料庫..."
-            gunzip -c data/zf_trend_*.db.gz > data/zf_trend.db
-            rm data/zf_trend_*.db.gz
-            echo "✅ 從壓縮檔還原成功"
-          elif gh release download db-backup -p "zf_trend.db" -D data/ 2>/dev/null; then
+          # 優先下載未壓縮版（最新）
+          if gh release download db-backup -p "zf_trend.db" -D data/ 2>/dev/null; then
             echo "✅ 從 Release 下載成功"
           else
             echo "❌ 無法下載資料庫"
