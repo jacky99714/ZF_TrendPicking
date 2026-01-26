@@ -1,0 +1,71 @@
+# 匯出單一股票資料到驗證 Sheet
+name: Export Stock Data
+
+on:
+  workflow_dispatch:
+    inputs:
+      stock_id:
+        description: '股票代號'
+        required: true
+        type: string
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Download database from Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p data
+          echo "從 Release 下載資料庫..."
+          # 嘗試下載壓縮版
+          if gh release download db-backup -p "zf_trend_*.db.gz" -D data/ 2>/dev/null; then
+            echo "解壓縮資料庫..."
+            gunzip -c data/zf_trend_*.db.gz > data/zf_trend.db
+            rm data/zf_trend_*.db.gz
+            echo "✅ 從壓縮檔還原成功"
+          elif gh release download db-backup -p "zf_trend.db" -D data/ 2>/dev/null; then
+            echo "✅ 從 Release 下載成功"
+          else
+            echo "❌ 無法下載資料庫"
+            exit 1
+          fi
+          ls -la data/
+
+      - name: Set up Google credentials
+        env:
+          GOOGLE_CREDS: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+        run: |
+          if [ -n "$GOOGLE_CREDS" ]; then
+            echo "$GOOGLE_CREDS" > credentials.json
+            echo "✅ Google credentials 已設定"
+          else
+            echo "❌ 未設定 GOOGLE_CREDENTIALS_JSON"
+            exit 1
+          fi
+
+      - name: Export stock data
+        env:
+          GOOGLE_CREDENTIALS_PATH: credentials.json
+          SHEET_ID_VERIFICATION: ${{ secrets.SHEET_ID_VERIFICATION }}
+        run: |
+          python scripts/export_single_stock.py ${{ github.event.inputs.stock_id }}
