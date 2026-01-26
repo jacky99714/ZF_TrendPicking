@@ -1,7 +1,7 @@
 """
 匯出單一股票的完整資料到驗證 Google Sheet
 
-用途：詳細對照資料庫計算結果
+用途：詳細對照資料庫計算結果（匯出全部歷史資料）
 """
 import sqlite3
 import sys
@@ -59,8 +59,8 @@ def export_single_stock(stock_id: str):
     df = MovingAverageCalculator.calculate_close_high(df, periods=[55])
     df = MovingAverageCalculator.calculate_second_high(df, period=55)
 
-    # 準備匯出資料（取最近 100 筆，方便查看）
-    df_export = df.tail(100).copy()
+    # 準備匯出資料（全部歷史資料）
+    df_export = df.copy()
 
     # 格式化數值
     def safe_round(val, decimals=4):
