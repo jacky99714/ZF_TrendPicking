@@ -65,6 +65,7 @@ jobs:
 
       - name: Export stock data
         env:
+          PYTHONPATH: ${{ github.workspace }}
           GOOGLE_CREDENTIALS_PATH: credentials.json
           SHEET_ID_VERIFICATION: ${{ secrets.SHEET_ID_VERIFICATION }}
         run: |
