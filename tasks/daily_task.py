@@ -258,17 +258,26 @@ class DailyTask:
         if df.empty:
             return []
 
+        def _safe_str(val, default="-"):
+            """將 NaN/None 轉為預設字串"""
+            if val is None or (isinstance(val, float) and pd.isna(val)):
+                return default
+            return str(val)
+
         results = []
         for _, row in df.iterrows():
             stock_id = row["stock_id"]
             info = stock_info.get(stock_id, {})
 
             result = row.to_dict()
+            # 清理 row.to_dict() 中的 NaN 值（pandas 將 NULL 轉為 float NaN）
+            result = {k: (v if not (isinstance(v, float) and pd.isna(v)) else None)
+                      for k, v in result.items()}
             result.update({
-                "stock_name": info.get("stock_name", ""),
-                "company_name": info.get("stock_name", ""),
-                "industry_category": info.get("industry_category", "-"),
-                "industry_category2": info.get("industry_category2", "-"),
+                "stock_name": _safe_str(info.get("stock_name"), ""),
+                "company_name": _safe_str(info.get("stock_name"), ""),
+                "industry_category": _safe_str(info.get("industry_category")),
+                "industry_category2": _safe_str(info.get("industry_category2")),
                 "product_mix": "-",
             })
             results.append(result)
