@@ -65,16 +65,31 @@ class GoogleSheetExporter:
             self.client = None
 
     def _get_sheet(self, sheet_id: str) -> Optional[gspread.Spreadsheet]:
-        """取得 Spreadsheet 物件"""
+        """取得 Spreadsheet 物件（含 503 重試機制）"""
         if not self.client:
             logger.error("未連線到 Google Sheets")
             return None
 
-        try:
-            return self.client.open_by_key(sheet_id)
-        except Exception as e:
-            logger.error(f"無法開啟 Sheet {sheet_id}: {e}")
-            return None
+        for attempt in range(GSHEET_MAX_RETRIES + 1):
+            try:
+                return self.client.open_by_key(sheet_id)
+            except gspread.exceptions.APIError as e:
+                # 503 Service Unavailable 或其他可重試的錯誤
+                if "503" in str(e) or "429" in str(e) or "500" in str(e):
+                    if attempt < GSHEET_MAX_RETRIES:
+                        wait_time = GSHEET_RETRY_DELAY * (attempt + 1)
+                        logger.warning(
+                            f"Google API 暫時不可用，{wait_time} 秒後重試 "
+                            f"({attempt + 1}/{GSHEET_MAX_RETRIES})..."
+                        )
+                        time.sleep(wait_time)
+                        continue
+                logger.error(f"無法開啟 Sheet {sheet_id}: {e}")
+                return None
+            except Exception as e:
+                logger.error(f"無法開啟 Sheet {sheet_id}: {e}")
+                return None
+        return None
 
     def _format_date_tab(self, target_date: date) -> str:
         """格式化日期為分頁名稱 (YYMMDD)"""
