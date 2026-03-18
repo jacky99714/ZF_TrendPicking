@@ -18,6 +18,19 @@ GSHEET_MAX_RETRIES = 3
 GSHEET_RETRY_DELAY = 5  # 秒
 
 
+def _safe_val(val):
+    """安全格式化數值（處理 NaN/inf）"""
+    if val is None:
+        return ""
+    if isinstance(val, bool):
+        return "O" if val else ""
+    if isinstance(val, float):
+        if pd.isna(val) or np.isinf(val):
+            return ""
+        return round(val, 4)
+    return str(val)
+
+
 class GoogleSheetExporter:
     """
     Google Sheet 匯出器
@@ -537,11 +550,15 @@ class GoogleSheetExporter:
         sheet_id: Optional[str] = None
     ) -> bool:
         """
-        匯出驗證資料（包含所有計算中間欄位）
+        匯出驗證資料（拆成 VCP 和三線開花兩個獨立頁籤）
+
+        每日產生兩個頁籤：
+        - YYMMDD_VCP: VCP 驗證資料
+        - YYMMDD_三線: 三線開花驗證資料
 
         Args:
-            vcp_data: VCP 驗證資料列表（包含所有計算欄位）
-            sanxian_data: 三線開花驗證資料列表（包含所有計算欄位）
+            vcp_data: VCP 驗證資料列表
+            sanxian_data: 三線開花驗證資料列表
             target_date: 篩選日期
             market_return_20d: 大盤 20 日報酬率
             sheet_id: Sheet ID
@@ -554,36 +571,48 @@ class GoogleSheetExporter:
             logger.error("未設定驗證 Sheet ID")
             return False
 
+        vcp_ok = self._export_verification_vcp(
+            vcp_data, target_date, market_return_20d, sheet_id
+        )
+        sanxian_ok = self._export_verification_sanxian(
+            sanxian_data, target_date, sheet_id
+        )
+
+        # 排序頁籤
+        self.sort_worksheets_by_date(sheet_id)
+
+        return vcp_ok and sanxian_ok
+
+    def _export_verification_vcp(
+        self,
+        vcp_data: list[dict],
+        target_date: date,
+        market_return_20d: float,
+        sheet_id: str
+    ) -> bool:
+        """匯出 VCP 驗證資料到獨立頁籤"""
         sheet = self._get_sheet(sheet_id)
         if not sheet:
             return False
 
         try:
-            tab_name = self._format_date_tab(target_date)
+            tab_name = f"{self._format_date_tab(target_date)}_VCP"
 
-            # 建立新分頁
             try:
                 existing = sheet.worksheet(tab_name)
                 sheet.del_worksheet(existing)
             except gspread.WorksheetNotFound:
                 pass
 
-            # 計算總行數（VCP + 間隔 + 三線開花）
-            total_rows = max(len(vcp_data) + len(sanxian_data) + 10, 100)
-
             worksheet = sheet.add_worksheet(
                 title=tab_name,
-                rows=total_rows,
-                cols=25,
+                rows=max(len(vcp_data) + 3, 10),
+                cols=20,
                 index=1
             )
 
-            current_row = 1
-
-            # ========== VCP 驗證區塊 ==========
             vcp_title = [[f"=== VCP 驗證資料 ({target_date}) === 大盤20日報酬: {market_return_20d:.4f}"]]
-            worksheet.update(vcp_title, f"A{current_row}")
-            current_row += 1
+            worksheet.update(vcp_title, "A1")
 
             vcp_headers = [
                 "stock_id", "date", "close_price", "high_price",
@@ -593,59 +622,85 @@ class GoogleSheetExporter:
                 "cond4_ma200_up", "cond5_beat_market",
                 "is_strong", "is_new_high", "is_vcp"
             ]
-            worksheet.update([vcp_headers], f"A{current_row}")
-            current_row += 1
+            worksheet.update([vcp_headers], "A2")
 
             if vcp_data:
-                def safe_val(val):
-                    """安全格式化數值（處理 NaN/inf）"""
-                    if val is None:
-                        return ""
-                    if isinstance(val, bool):
-                        return "O" if val else ""
-                    if isinstance(val, float):
-                        if pd.isna(val) or np.isinf(val):
-                            return ""
-                        return round(val, 4)
-                    return str(val)
-
-                vcp_rows = []
-                for row in vcp_data:
-                    vcp_rows.append([
-                        safe_val(row.get("stock_id")),
+                vcp_rows = [
+                    [
+                        _safe_val(row.get("stock_id")),
                         str(row.get("date", "")),
-                        safe_val(row.get("close_price")),
-                        safe_val(row.get("high_price")),
-                        safe_val(row.get("ma50")),
-                        safe_val(row.get("ma150")),
-                        safe_val(row.get("ma200")),
-                        safe_val(row.get("ma200_slope_20d")),
-                        safe_val(row.get("return_20d")),
-                        safe_val(row.get("high_5d")),
-                        safe_val(row.get("high_252d")),
-                        safe_val(row.get("gap_to_52w_high")),
-                        safe_val(row.get("cond1")),
-                        safe_val(row.get("cond2")),
-                        safe_val(row.get("cond3")),
-                        safe_val(row.get("cond4")),
-                        safe_val(row.get("cond5")),
-                        safe_val(row.get("is_strong")),
-                        safe_val(row.get("is_new_high")),
-                        safe_val(row.get("is_vcp")),
-                    ])
+                        _safe_val(row.get("close_price")),
+                        _safe_val(row.get("high_price")),
+                        _safe_val(row.get("ma50")),
+                        _safe_val(row.get("ma150")),
+                        _safe_val(row.get("ma200")),
+                        _safe_val(row.get("ma200_slope_20d")),
+                        _safe_val(row.get("return_20d")),
+                        _safe_val(row.get("high_5d")),
+                        _safe_val(row.get("high_252d")),
+                        _safe_val(row.get("gap_to_52w_high")),
+                        _safe_val(row.get("cond1")),
+                        _safe_val(row.get("cond2")),
+                        _safe_val(row.get("cond3")),
+                        _safe_val(row.get("cond4")),
+                        _safe_val(row.get("cond5")),
+                        _safe_val(row.get("is_strong")),
+                        _safe_val(row.get("is_new_high")),
+                        _safe_val(row.get("is_vcp")),
+                    ]
+                    for row in vcp_data
+                ]
+                worksheet.update(vcp_rows, "A3")
 
-                worksheet.update(vcp_rows, f"A{current_row}")
-                current_row += len(vcp_rows)
+            logger.info(f"VCP 驗證資料匯出完成: {len(vcp_data)} 筆 -> {tab_name}")
+            return True
 
-            logger.info(f"VCP 驗證資料匯出完成: {len(vcp_data)} 筆")
+        except gspread.exceptions.APIError as e:
+            if "RATE_LIMIT_EXCEEDED" in str(e) or "429" in str(e):
+                for retry in range(GSHEET_MAX_RETRIES):
+                    logger.warning(f"Google API 限流，{GSHEET_RETRY_DELAY} 秒後重試...")
+                    time.sleep(GSHEET_RETRY_DELAY * (retry + 1))
+                    try:
+                        return self._export_verification_vcp(
+                            vcp_data, target_date, market_return_20d, sheet_id
+                        )
+                    except Exception:
+                        continue
+            logger.error(f"VCP 驗證資料匯出失敗: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"VCP 驗證資料匯出失敗: {e}")
+            return False
 
-            # 間隔
-            current_row += 3
+    def _export_verification_sanxian(
+        self,
+        sanxian_data: list[dict],
+        target_date: date,
+        sheet_id: str
+    ) -> bool:
+        """匯出三線開花驗證資料到獨立頁籤"""
+        sheet = self._get_sheet(sheet_id)
+        if not sheet:
+            return False
 
-            # ========== 三線開花驗證區塊 ==========
+        try:
+            tab_name = f"{self._format_date_tab(target_date)}_三線"
+
+            try:
+                existing = sheet.worksheet(tab_name)
+                sheet.del_worksheet(existing)
+            except gspread.WorksheetNotFound:
+                pass
+
+            worksheet = sheet.add_worksheet(
+                title=tab_name,
+                rows=max(len(sanxian_data) + 3, 10),
+                cols=14,
+                index=2
+            )
+
             sanxian_title = [[f"=== 三線開花驗證資料 ({target_date}) ==="]]
-            worksheet.update(sanxian_title, f"A{current_row}")
-            current_row += 1
+            worksheet.update(sanxian_title, "A1")
 
             sanxian_headers = [
                 "stock_id", "date", "close_price",
@@ -654,55 +709,48 @@ class GoogleSheetExporter:
                 "cond1_close>ma8", "cond2_ma8>ma21", "cond3_ma21>ma55",
                 "cond4_new_high", "is_sanxian"
             ]
-            worksheet.update([sanxian_headers], f"A{current_row}")
-            current_row += 1
+            worksheet.update([sanxian_headers], "A2")
 
             if sanxian_data:
-                sanxian_rows = []
-                for row in sanxian_data:
-                    sanxian_rows.append([
-                        safe_val(row.get("stock_id")),
+                sanxian_rows = [
+                    [
+                        _safe_val(row.get("stock_id")),
                         str(row.get("date", "")),
-                        safe_val(row.get("close_price")),
-                        safe_val(row.get("ma8")),
-                        safe_val(row.get("ma21")),
-                        safe_val(row.get("ma55")),
-                        safe_val(row.get("high_55d")),
-                        safe_val(row.get("second_high_55d")),
-                        safe_val(row.get("gap_ratio")),
-                        safe_val(row.get("cond1")),
-                        safe_val(row.get("cond2")),
-                        safe_val(row.get("cond3")),
-                        safe_val(row.get("cond4")),
-                        safe_val(row.get("is_sanxian")),
-                    ])
-
-                worksheet.update(sanxian_rows, f"A{current_row}")
+                        _safe_val(row.get("close_price")),
+                        _safe_val(row.get("ma8")),
+                        _safe_val(row.get("ma21")),
+                        _safe_val(row.get("ma55")),
+                        _safe_val(row.get("high_55d")),
+                        _safe_val(row.get("second_high_55d")),
+                        _safe_val(row.get("gap_ratio")),
+                        _safe_val(row.get("cond1")),
+                        _safe_val(row.get("cond2")),
+                        _safe_val(row.get("cond3")),
+                        _safe_val(row.get("cond4")),
+                        _safe_val(row.get("is_sanxian")),
+                    ]
+                    for row in sanxian_data
+                ]
+                worksheet.update(sanxian_rows, "A3")
 
             logger.info(f"三線開花驗證資料匯出完成: {len(sanxian_data)} 筆 -> {tab_name}")
-
-            # 自動排序頁籤（最新日期在前）
-            self.sort_worksheets_by_date(sheet_id)
-
             return True
 
         except gspread.exceptions.APIError as e:
             if "RATE_LIMIT_EXCEEDED" in str(e) or "429" in str(e):
                 for retry in range(GSHEET_MAX_RETRIES):
-                    logger.warning(f"Google API 限流，{GSHEET_RETRY_DELAY} 秒後重試 ({retry + 1}/{GSHEET_MAX_RETRIES})...")
+                    logger.warning(f"Google API 限流，{GSHEET_RETRY_DELAY} 秒後重試...")
                     time.sleep(GSHEET_RETRY_DELAY * (retry + 1))
                     try:
-                        # 重試匯出（已包含排序）
-                        return self.export_verification(
-                            vcp_data, sanxian_data, target_date,
-                            market_return_20d, sheet_id
+                        return self._export_verification_sanxian(
+                            sanxian_data, target_date, sheet_id
                         )
                     except Exception:
                         continue
-            logger.error(f"驗證資料匯出失敗: {e}")
+            logger.error(f"三線開花驗證資料匯出失敗: {e}")
             return False
         except Exception as e:
-            logger.error(f"驗證資料匯出失敗: {e}")
+            logger.error(f"三線開花驗證資料匯出失敗: {e}")
             return False
 
     def sort_worksheets_by_date(
@@ -737,10 +785,10 @@ class GoogleSheetExporter:
             for ws in worksheets:
                 if ws.title in fixed_tabs:
                     fixed_worksheets.append(ws)
-                elif re.match(r"^\d{6}$", ws.title):  # YYMMDD 格式
+                elif re.match(r"^\d{6}(_.*)?$", ws.title):  # YYMMDD 或 YYMMDD_VCP/YYMMDD_三線
                     date_worksheets.append(ws)
 
-            # 日期頁籤按名稱降序排列（最新在前）
+            # 日期頁籤按名稱降序排列（最新在前，同日期 VCP 在三線前面）
             date_worksheets.sort(key=lambda x: x.title, reverse=True)
 
             # 重新排序：固定頁籤 + 日期頁籤
