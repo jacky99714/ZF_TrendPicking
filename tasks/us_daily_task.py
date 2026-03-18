@@ -14,6 +14,7 @@ from calculators.us_vcp_filter import USVCPFilter, calculate_us_market_return
 from calculators.us_sanxian_filter import USSanxianFilter
 from exporters.us_google_sheet import USGoogleSheetExporter
 from utils.us_trading_calendar import USMarketCalendar
+from utils.us_split_detector import USSplitDetector
 
 
 class USDailyTask:
@@ -97,6 +98,7 @@ class USDailyTask:
             "success": False,
             "skipped": False,
             "price_count": 0,
+            "split_refreshed_count": 0,
             "vcp_count": 0,
             "sanxian_count": 0,
             "errors": [],
@@ -120,7 +122,7 @@ class USDailyTask:
                 logger.error("無法取得美股股票清單，任務結束")
                 return result
 
-            # Step 2: 取得並儲存股價（批量查詢）
+            # Step 2: 取得並儲存股價（批量查詢，下載 2 天供分割偵測）
             price_count = self._fetch_and_save_prices(target_date, stock_info)
             result["price_count"] = price_count
 
@@ -128,6 +130,10 @@ class USDailyTask:
                 result["errors"].append("無美股股價資料（可能非交易日）")
                 logger.warning("無美股股價資料，任務結束")
                 return result
+
+            # Step 2.5: 偵測分割並重新下載受影響股票的歷史資料
+            split_count = self._detect_and_refresh_splits(target_date)
+            result["split_refreshed_count"] = split_count
 
             # Step 3: 取得並儲存大盤指數
             market_count = self._fetch_and_save_market_index(target_date)
@@ -162,7 +168,11 @@ class USDailyTask:
     def _fetch_and_save_prices(self, target_date: date, stock_info: dict) -> int:
         """取得並儲存美股股價（批量查詢）
 
-        如果資料庫中已有該日期的資料，則跳過下載以避免 API 速率限制
+        下載前一交易日 + 當日共 2 天資料，用於分割偵測比對。
+        如果資料庫中已有該日期的資料，則跳過下載以避免 API 速率限制。
+
+        Returns:
+            當日股價筆數
         """
         # 先檢查資料庫中是否已有該日期的資料
         existing_count = self.db.get_price_count_by_date(target_date)
@@ -175,9 +185,13 @@ class USDailyTask:
         # 取得所有股票代號
         stock_ids = list(stock_info.keys())
 
-        # 使用 yfinance 批量查詢
+        # 取得前一交易日，下載 2 天資料供分割偵測使用
+        prev_trading_day = USMarketCalendar.get_previous_trading_day(target_date)
+        download_start = prev_trading_day if prev_trading_day else target_date
+
+        # 使用 yfinance 批量查詢（下載 2 天，不增加 API 呼叫次數）
         price_df = self.client.get_stock_price(
-            start_date=target_date,
+            start_date=download_start,
             end_date=target_date,
             stock_ids=stock_ids
         )
@@ -185,9 +199,36 @@ class USDailyTask:
         if price_df.empty:
             return 0
 
-        # 儲存至美股資料庫
+        # 分割偵測：在 upsert 前先讀取 DB 中前一交易日的舊值
+        self._fresh_prev_day_prices = {}
+        self._db_prev_day_prices = {}
+
+        if prev_trading_day:
+            # 從 yfinance 下載結果中提取前一交易日的 fresh 價格
+            prev_day_df = price_df[price_df["date"] == prev_trading_day]
+            self._fresh_prev_day_prices = {
+                row["stock_id"]: row["close"]
+                for _, row in prev_day_df.iterrows()
+                if pd.notna(row.get("close"))
+            }
+
+            # 從 DB 讀取前一交易日的舊收盤價（upsert 前）
+            db_prev_df = self.db.get_daily_prices(
+                prev_trading_day, prev_trading_day
+            )
+            if not db_prev_df.empty:
+                self._db_prev_day_prices = {
+                    row["stock_id"]: row["close_price"]
+                    for _, row in db_prev_df.iterrows()
+                    if pd.notna(row.get("close_price"))
+                }
+
+        # 儲存至美股資料庫（包含前一日 + 當日）
         count = self.db.upsert_daily_price(price_df)
-        return count
+
+        # 回傳當日的筆數
+        today_count = len(price_df[price_df["date"] == target_date])
+        return today_count
 
     def _fetch_and_save_market_index(self, target_date: date) -> int:
         """取得並儲存美股大盤指數
@@ -210,6 +251,68 @@ class USDailyTask:
 
         count = self.db.upsert_market_index(market_df)
         return count
+
+    def _detect_and_refresh_splits(self, target_date: date) -> int:
+        """偵測分割/合股並重新下載受影響股票的完整歷史
+
+        利用 _fetch_and_save_prices 已下載的前一日 fresh 資料，
+        與 DB 中原本的舊值比對，找出有價格調整的股票。
+
+        Returns:
+            重新下載的股票數量
+        """
+        fresh_prices = getattr(self, "_fresh_prev_day_prices", {})
+        if not fresh_prices:
+            logger.info("無前一交易日的 fresh 資料，跳過分割偵測")
+            return 0
+
+        prev_trading_day = USMarketCalendar.get_previous_trading_day(target_date)
+        if not prev_trading_day:
+            return 0
+
+        # 使用 _db_prev_day_prices（在 _fetch_and_save_prices 中於 upsert 前讀取）
+        db_prices = getattr(self, "_db_prev_day_prices", {})
+        if not db_prices:
+            logger.info("DB 中無前一交易日的舊資料，跳過分割偵測")
+            return 0
+
+        # 偵測有價格調整的股票
+        adjusted_stocks = USSplitDetector.detect_adjusted_stocks(db_prices, fresh_prices)
+
+        if not adjusted_stocks:
+            logger.info("未偵測到股票分割/合股，所有價格一致")
+            return 0
+
+        logger.warning(
+            f"偵測到 {len(adjusted_stocks)} 檔股票有價格調整（疑似分割/合股）: "
+            f"{adjusted_stocks[:10]}{'...' if len(adjusted_stocks) > 10 else ''}"
+        )
+
+        # 重新下載受影響股票的 365 天完整歷史
+        history_start = target_date - timedelta(days=365)
+        logger.info(
+            f"開始重新下載 {len(adjusted_stocks)} 檔股票的歷史資料 "
+            f"({history_start} ~ {target_date})..."
+        )
+
+        history_df = self.client.get_stock_price(
+            start_date=history_start,
+            end_date=target_date,
+            stock_ids=adjusted_stocks
+        )
+
+        if history_df.empty:
+            logger.warning("重新下載歷史資料為空")
+            return 0
+
+        # 覆蓋 DB 中的舊資料
+        count = self.db.upsert_daily_price(history_df)
+        logger.info(
+            f"已重新下載並更新 {len(adjusted_stocks)} 檔股票的歷史資料 "
+            f"(共 {count} 筆)"
+        )
+
+        return len(adjusted_stocks)
 
     def _run_filters(self, target_date: date) -> tuple[list[dict], list[dict], float]:
         """執行美股篩選
