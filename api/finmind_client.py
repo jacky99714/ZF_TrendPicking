@@ -1,11 +1,12 @@
 """
 FinMind API 客戶端
 """
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 import pandas as pd
 import requests
+import yfinance as yf
 from loguru import logger
 
 from config.settings import (
@@ -160,6 +161,85 @@ class FinMindClient:
             f"重試次數: {retry_count}, "
             f"參數: {error_entry['params']}"
         )
+
+    def _fix_zero_prices_with_yfinance(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        使用 yfinance 補齊收盤價為 0 的異常資料
+
+        只處理正規股票（4-5位數字代號），跳過權證（6位數）等商品
+
+        Args:
+            df: 含有異常資料的 DataFrame
+
+        Returns:
+            修正後的 DataFrame
+        """
+        import re
+
+        # 找出需要修正的股票和日期
+        zero_rows = df[df["close"] == 0].copy()
+        if zero_rows.empty:
+            return df
+
+        # 按股票分組處理
+        for stock_id in zero_rows["stock_id"].unique():
+            # 只處理正規股票（4-5位數字代號），跳過權證等商品
+            if not re.match(r"^\d{4,5}$", str(stock_id)):
+                logger.debug(f"跳過非正規股票 {stock_id} 的 yfinance 補齊")
+                continue
+            stock_zeros = zero_rows[zero_rows["stock_id"] == stock_id]
+            dates_to_fix = stock_zeros["date"].tolist()
+
+            try:
+                # 使用 yfinance 取得正確價格
+                ticker_symbol = f"{stock_id}.TW"
+                ticker = yf.Ticker(ticker_symbol)
+
+                # 取得日期範圍的資料
+                min_date = min(dates_to_fix)
+                max_date = max(dates_to_fix)
+                # yfinance 的 end 是 exclusive，所以加一天
+                yf_data = ticker.history(
+                    start=min_date,
+                    end=max_date + timedelta(days=1)
+                )
+
+                if yf_data.empty:
+                    # 如果主板沒有，試試上櫃
+                    ticker_symbol = f"{stock_id}.TWO"
+                    ticker = yf.Ticker(ticker_symbol)
+                    yf_data = ticker.history(
+                        start=min_date,
+                        end=max_date + timedelta(days=1)
+                    )
+
+                if yf_data.empty:
+                    logger.warning(f"yfinance 也無法取得 {stock_id} 的資料，跳過")
+                    continue
+
+                # 逐日補齊
+                for fix_date in dates_to_fix:
+                    yf_row = yf_data[yf_data.index.date == fix_date]
+                    if not yf_row.empty:
+                        row = yf_row.iloc[0]
+                        mask = (df["stock_id"] == stock_id) & (df["date"] == fix_date)
+                        df.loc[mask, "open"] = row["Open"]
+                        df.loc[mask, "high"] = row["High"]
+                        df.loc[mask, "low"] = row["Low"]
+                        df.loc[mask, "close"] = row["Close"]
+                        logger.info(f"已用 yfinance 補齊 {stock_id} {fix_date} 的價格: {row['Close']}")
+                    else:
+                        logger.warning(f"yfinance 無 {stock_id} {fix_date} 的資料")
+
+            except Exception as e:
+                logger.error(f"yfinance 補齊 {stock_id} 失敗: {e}")
+
+        # 確認是否還有未修正的資料
+        remaining_zeros = (df["close"] == 0).sum()
+        if remaining_zeros > 0:
+            logger.warning(f"仍有 {remaining_zeros} 筆資料無法補齊")
+
+        return df
 
     def get_stock_info(self) -> pd.DataFrame:
         """
@@ -333,6 +413,8 @@ class FinMindClient:
         stock_count = len(stock_ids) if stock_ids else "全部"
         logger.info(f"取得股價資料: {start_date} ~ {end_date}, 共 {stock_count} 檔")
 
+        # 使用未調整股價（TaiwanStockPrice）
+        # 券商的均線圖是用未調整收盤價計算的，不是還原權息價格
         params = {
             "dataset": "TaiwanStockPrice",
             "start_date": start_date.strftime("%Y-%m-%d"),
@@ -365,6 +447,15 @@ class FinMindClient:
 
         # 轉換日期
         df["date"] = pd.to_datetime(df["date"]).dt.date
+
+        # 修正異常資料：收盤價為 0 的資料（可能是停牌或資料錯誤）
+        # FinMind 偶爾會返回價格全為 0 的資料，會影響均線計算
+        # 使用 yfinance 來取得正確的價格補齊
+        zero_close_mask = df["close"] == 0
+        zero_count = zero_close_mask.sum()
+        if zero_count > 0:
+            logger.warning(f"發現 {zero_count} 筆異常資料（收盤價為 0），嘗試用 yfinance 補齊...")
+            df = self._fix_zero_prices_with_yfinance(df)
 
         # 如果有指定股票清單，過濾結果
         if stock_ids:

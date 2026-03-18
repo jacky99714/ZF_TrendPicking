@@ -1,5 +1,9 @@
 """
 用 FinMind 重新抓取股價資料並更新 SQLite 資料庫
+
+使用未調整股價（TaiwanStockPrice）
+- 券商的均線圖是用未調整收盤價計算的，不是還原權息價格
+- 需要至少 400 天歷史資料才能正確計算 MA200
 """
 import sqlite3
 import time
@@ -9,21 +13,22 @@ import pandas as pd
 from loguru import logger
 
 from api.finmind_client import FinMindClient
+from utils.trading_calendar import TradingCalendar
 
 
 def rebuild_price_data():
-    """重建股價資料"""
+    """重建股價資料（使用未調整價格）"""
 
     # 設定
     DB_PATH = "data/zf_trend.db"
-    START_DATE = date(2025, 1, 21)
-    END_DATE = date(2026, 1, 21)
-    BATCH_DAYS = 30  # 每批次抓取天數
-    BATCH_INTERVAL = 3  # 批次間隔秒數
+    # 從 2024-05-16 開始（與券商資料對齊，共 415 個交易日）
+    # 這樣才能正確計算 MA200 並與券商均線一致
+    START_DATE = date(2024, 5, 16)
+    END_DATE = date(2026, 1, 23)
+    DAY_INTERVAL = 1  # 每次查詢間隔秒數
 
-    logger.info("=== 開始重建股價資料 ===")
+    logger.info("=== 開始重建股價資料（未調整價格）===")
     logger.info(f"日期範圍: {START_DATE} ~ {END_DATE}")
-    logger.info(f"批次大小: {BATCH_DAYS} 天")
 
     # 初始化 FinMind 客戶端
     client = FinMindClient()
@@ -38,39 +43,45 @@ def rebuild_price_data():
     conn.commit()
     logger.info("已清空 daily_price 表")
 
-    # 分批抓取資料
+    # 逐日抓取資料（避免批量查詢只回傳第一天的問題）
     all_data = []
-    current_start = START_DATE
-    batch_num = 0
-    total_batches = ((END_DATE - START_DATE).days + BATCH_DAYS - 1) // BATCH_DAYS
+    current_date = START_DATE
+    total_days = (END_DATE - START_DATE).days + 1
+    day_num = 0
+    trading_days_processed = 0
 
-    while current_start <= END_DATE:
-        batch_num += 1
-        current_end = min(current_start + timedelta(days=BATCH_DAYS - 1), END_DATE)
+    while current_date <= END_DATE:
+        day_num += 1
 
-        logger.info(f"[{batch_num}/{total_batches}] 抓取 {current_start} ~ {current_end}...")
+        # 跳過非交易日
+        if not TradingCalendar.is_trading_day(current_date):
+            current_date += timedelta(days=1)
+            continue
+
+        trading_days_processed += 1
+        logger.info(f"[{day_num}/{total_days}] 抓取 {current_date}...")
 
         try:
             df = client.get_stock_price(
-                start_date=current_start,
-                end_date=current_end,
+                start_date=current_date,
+                end_date=current_date,  # 單日查詢
             )
 
             if not df.empty:
                 all_data.append(df)
                 logger.info(f"  取得 {len(df)} 筆資料")
             else:
-                logger.warning(f"  無資料")
+                logger.warning(f"  無資料（可能為假日）")
 
         except Exception as e:
             logger.error(f"  抓取失敗: {e}")
 
-        # 下一批次
-        current_start = current_end + timedelta(days=1)
+        # 下一天
+        current_date += timedelta(days=1)
 
-        # 批次間隔
-        if current_start <= END_DATE:
-            time.sleep(BATCH_INTERVAL)
+        # 間隔（避免 API 限流）
+        if current_date <= END_DATE:
+            time.sleep(DAY_INTERVAL)
 
     # 合併所有資料
     if not all_data:
