@@ -1,46 +1,189 @@
 """
-重新計算並匯出所有已存在篩選日期的台股 VCP/三線開花結果到 Google Sheet
+重新計算並匯出台股 VCP/三線開花結果到 Google Sheet
 
-用途：修正零價異常後，重新計算 return_20d 並更新 Sheet
+功能：
+  1. backfill：補齊本地 DB 缺少的股價和大盤資料
+  2. 讀取 Sheet 上所有日期頁籤
+  3. 對每個日期重新計算篩選並覆蓋匯出
 
 使用方式：
     source .venv/bin/activate
-    python scripts/reexport_all_dates.py
+    python scripts/reexport_all_dates.py              # 完整流程（backfill + 重跑）
+    python scripts/reexport_all_dates.py --skip-fetch  # 跳過 backfill，只重跑匯出
 """
-import sqlite3
+import argparse
+import re
 import sys
 import time
 from datetime import date, timedelta
 from pathlib import Path
 
-# 確保可以從 scripts/ 目錄匯入專案模組
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import numpy as np
+import pandas as pd
 from loguru import logger
 
+from api.hybrid_client import HybridClient
 from calculators.moving_average import MovingAverageCalculator
 from calculators.vcp_filter import VCPFilter, calculate_market_return
 from calculators.sanxian_filter import SanxianFilter
+from config.settings import SHEET_IDS
 from data.sqlite_database import SQLiteDatabase
 from exporters.google_sheet import GoogleSheetExporter
 
 
-DB_PATH = Path(__file__).parent.parent / "data" / "zf_trend.db"
-
 # Google API 限流保護
-DELAY_BETWEEN_DATES = 5  # 每個日期間隔秒數
+DELAY_BETWEEN_EXPORTS = 8  # 每個日期間隔秒數
 
 
-def get_filter_dates() -> list[str]:
-    """取得 DB 中所有篩選日期"""
-    conn = sqlite3.connect(str(DB_PATH))
-    cur = conn.execute(
-        "SELECT DISTINCT filter_date FROM filter_result ORDER BY filter_date"
-    )
-    dates = [row[0] for row in cur.fetchall()]
+# ==================== Step 1: Backfill ====================
+
+def backfill_prices(db: SQLiteDatabase, days: int = 90):
+    """補齊本地 DB 缺少的股價資料"""
+    import sqlite3
+    from config.settings import SQLITE_DB_PATH
+
+    conn = sqlite3.connect(SQLITE_DB_PATH)
+    cur = conn.execute("SELECT MAX(date) FROM daily_price")
+    max_date_str = cur.fetchone()[0]
     conn.close()
+
+    if max_date_str:
+        max_date = date.fromisoformat(max_date_str)
+        gap_days = (date.today() - max_date).days
+        if gap_days <= 1:
+            logger.info(f"DB 資料已是最新（{max_date}），跳過 backfill")
+            return
+        days = min(days, gap_days + 30)  # 多抓 30 天確保完整
+        logger.info(f"DB 最新日期: {max_date}，需補齊 {gap_days} 天")
+    else:
+        logger.info("DB 無資料，補齊最近 90 天")
+
+    client = HybridClient()
+    end_date = date.today()
+    start_date = end_date - timedelta(days=days)
+
+    # 取得市場類型
+    market_types = db.get_stock_market_types()
+    stock_ids = list(market_types.keys())
+
+    if not stock_ids:
+        logger.warning("尚無股票清單，請先執行 'python main.py init'")
+        return
+
+    logger.info(f"開始下載 {start_date} ~ {end_date} 的股價（{len(stock_ids)} 檔）...")
+
+    # 取得股價
+    price_df = client.get_stock_price(
+        start_date, end_date,
+        stock_ids=stock_ids,
+        market_types=market_types,
+    )
+    if not price_df.empty:
+        # 修正零價後再存入 DB
+        zero_mask = price_df["close"] == 0
+        zero_count = zero_mask.sum()
+        if zero_count > 0:
+            logger.warning(f"發現 {zero_count} 筆零價資料，將在計算時 forward-fill 修正")
+
+        count = db.upsert_daily_price(price_df)
+        logger.info(f"已補齊 {count} 筆股價資料")
+
+    # 取得大盤指數
+    market_df = client.get_market_index(start_date, end_date)
+    if not market_df.empty:
+        db.upsert_market_index(market_df)
+        logger.info(f"已補齊 {len(market_df)} 筆大盤指數")
+
+    # 修復 DB 中的零價
+    _fix_db_zero_prices(db)
+
+
+def _fix_db_zero_prices(db: SQLiteDatabase):
+    """修復 DB 中 close_price=0 的資料"""
+    import sqlite3
+    from config.settings import SQLITE_DB_PATH
+
+    conn = sqlite3.connect(SQLITE_DB_PATH)
+    cur = conn.execute("""
+        SELECT COUNT(*) FROM daily_price dp
+        JOIN stock_info si ON dp.stock_id = si.stock_id
+        WHERE dp.close_price = 0
+    """)
+    zero_count = cur.fetchone()[0]
+
+    if zero_count == 0:
+        conn.close()
+        return
+
+    logger.info(f"修復 DB 中 {zero_count} 筆零價資料...")
+
+    cur = conn.execute("""
+        SELECT dp.rowid, dp.stock_id, dp.date
+        FROM daily_price dp
+        JOIN stock_info si ON dp.stock_id = si.stock_id
+        WHERE dp.close_price = 0
+        ORDER BY dp.stock_id, dp.date
+    """)
+
+    fixed = 0
+    for rowid, stock_id, dt in cur.fetchall():
+        prev = conn.execute("""
+            SELECT close_price FROM daily_price
+            WHERE stock_id = ? AND date < ? AND close_price > 0
+            ORDER BY date DESC LIMIT 1
+        """, (stock_id, dt)).fetchone()
+
+        if prev:
+            conn.execute("""
+                UPDATE daily_price
+                SET open_price=?, high_price=?, low_price=?, close_price=?
+                WHERE rowid=?
+            """, (prev[0], prev[0], prev[0], prev[0], rowid))
+            fixed += 1
+
+    conn.commit()
+    conn.close()
+    logger.info(f"已修復 {fixed} 筆零價資料")
+
+
+# ==================== Step 2: 讀取 Sheet 日期 ====================
+
+def get_sheet_dates(exporter: GoogleSheetExporter) -> list[date]:
+    """從 VCP Sheet 讀取所有日期頁籤"""
+    sheet_id = SHEET_IDS.get("tw_vcp")
+    if not sheet_id:
+        logger.error("未設定 tw_vcp Sheet ID")
+        return []
+
+    sheet = exporter._get_sheet(sheet_id)
+    if not sheet:
+        return []
+
+    worksheets = sheet.worksheets()
+    dates = []
+    for ws in worksheets:
+        # 匹配 YYMMDD 格式（不含 _VCP / _三線 等後綴）
+        m = re.match(r"^(\d{6})$", ws.title)
+        if m:
+            try:
+                yy = int(m.group(1)[:2])
+                mm = int(m.group(1)[2:4])
+                dd = int(m.group(1)[4:6])
+                year = 2000 + yy  # 民國轉西元: 26 -> 2026? 不對，看起來就是 YY
+                # 但台灣用民國？看 260318 = 2026-03-18
+                # 不是民國，是西元年後兩位 26=2026
+                dates.append(date(year, mm, dd))
+            except ValueError:
+                continue
+
+    dates.sort()
+    logger.info(f"Sheet 上找到 {len(dates)} 個日期頁籤: {[d.isoformat() for d in dates]}")
     return dates
 
+
+# ==================== Step 3: 重新計算並匯出 ====================
 
 def reexport_date(
     target_date: date,
@@ -52,14 +195,13 @@ def reexport_date(
     """重新計算並匯出單一日期"""
     logger.info(f"=== 重新計算 {target_date} ===")
 
-    # 取得歷史資料
     start_date = target_date - timedelta(days=365)
     price_df = db.get_daily_prices(start_date, target_date)
     market_df = db.get_market_index(start_date, target_date)
 
     if price_df.empty:
         logger.warning(f"{target_date}: 無歷史資料，跳過")
-        return
+        return False
 
     # 計算大盤報酬率
     market_return = calculate_market_return(market_df, target_date, lookback=20)
@@ -82,11 +224,22 @@ def reexport_date(
     db.save_filter_results(vcp_results, "vcp", target_date)
     db.save_filter_results(sanxian_results, "sanxian", target_date)
 
-    # 匯出到 Google Sheet
-    if vcp_results:
-        exporter.export_vcp(vcp_results, target_date)
-    if sanxian_results:
-        exporter.export_sanxian(sanxian_results, target_date)
+    # 匯出到 Google Sheet（帶重試）
+    for attempt in range(3):
+        try:
+            if vcp_results:
+                exporter.export_vcp(vcp_results, target_date)
+            if sanxian_results:
+                exporter.export_sanxian(sanxian_results, target_date)
+            break
+        except Exception as e:
+            if "429" in str(e) and attempt < 2:
+                wait = 30 * (attempt + 1)
+                logger.warning(f"API 限流，等待 {wait} 秒後重試...")
+                time.sleep(wait)
+            else:
+                logger.error(f"匯出失敗: {e}")
+                return False
 
     # 匯出驗證資料
     vcp_verification = _prepare_vcp_verification(
@@ -95,20 +248,30 @@ def reexport_date(
     sanxian_verification = _prepare_sanxian_verification(price_df, target_date)
 
     if vcp_verification or sanxian_verification:
-        exporter.export_verification(
-            vcp_verification, sanxian_verification, target_date, market_return
-        )
+        for attempt in range(3):
+            try:
+                exporter.export_verification(
+                    vcp_verification, sanxian_verification,
+                    target_date, market_return
+                )
+                break
+            except Exception as e:
+                if "429" in str(e) and attempt < 2:
+                    wait = 30 * (attempt + 1)
+                    logger.warning(f"驗證匯出限流，等待 {wait} 秒後重試...")
+                    time.sleep(wait)
+                else:
+                    logger.error(f"驗證匯出失敗: {e}")
 
     logger.info(
         f"{target_date} 完成: VCP {len(vcp_results)} 檔, "
         f"三線開花 {len(sanxian_results)} 檔"
     )
+    return True
 
 
 def _enrich_results(df, stock_info: dict) -> list[dict]:
-    """補充股票基本資料（從 DailyTask._enrich_results 複製）"""
-    import pandas as pd
-
+    """補充股票基本資料"""
     if df.empty:
         return []
 
@@ -139,9 +302,6 @@ def _enrich_results(df, stock_info: dict) -> list[dict]:
 
 def _prepare_vcp_verification(price_df, market_return, target_date, vcp_filter):
     """準備 VCP 驗證資料"""
-    import pandas as pd
-    import numpy as np
-
     if price_df.empty:
         return []
 
@@ -164,7 +324,9 @@ def _prepare_vcp_verification(price_df, market_return, target_date, vcp_filter):
     df["cond3"] = ma150 > ma200
     df["cond4"] = df["ma200_slope_20d"].fillna(-1) > 0
     df["cond5"] = df["return_20d"].fillna(-float("inf")) > market_return
-    df["is_strong"] = df["cond1"] & df["cond2"] & df["cond3"] & df["cond4"] & df["cond5"]
+    df["is_strong"] = (
+        df["cond1"] & df["cond2"] & df["cond3"] & df["cond4"] & df["cond5"]
+    )
 
     high_5d = df["high_5d"].fillna(0)
     high_252d = df["high_252d"].fillna(1).replace(0, 1)
@@ -179,8 +341,6 @@ def _prepare_vcp_verification(price_df, market_return, target_date, vcp_filter):
 
 def _prepare_sanxian_verification(price_df, target_date):
     """準備三線開花驗證資料"""
-    import pandas as pd
-
     if price_df.empty:
         return []
 
@@ -194,32 +354,61 @@ def _prepare_sanxian_verification(price_df, target_date):
     return df.to_dict("records") if not df.empty else []
 
 
-def main():
-    dates = get_filter_dates()
-    if not dates:
-        logger.info("DB 中無篩選結果")
-        return
+# ==================== Main ====================
 
-    logger.info(f"找到 {len(dates)} 個篩選日期: {dates}")
+def main():
+    parser = argparse.ArgumentParser(
+        description="補齊資料並重新匯出所有台股 Sheet 日期"
+    )
+    parser.add_argument(
+        "--skip-fetch", action="store_true",
+        help="跳過 backfill，只重跑匯出"
+    )
+    args = parser.parse_args()
 
     db = SQLiteDatabase()
-    vcp_filter = VCPFilter()
-    sanxian_filter = SanxianFilter()
     exporter = GoogleSheetExporter()
 
     if not exporter.health_check():
         logger.error("Google Sheet 未連線，無法匯出")
         return
 
-    for i, date_str in enumerate(dates):
-        target = date.fromisoformat(date_str)
-        reexport_date(target, db, vcp_filter, sanxian_filter, exporter)
+    # Step 1: Backfill
+    if not args.skip_fetch:
+        logger.info("=== Step 1: 補齊股價資料 ===")
+        backfill_prices(db)
+    else:
+        logger.info("跳過 backfill")
+
+    # Step 2: 讀取 Sheet 日期
+    logger.info("=== Step 2: 讀取 Sheet 日期頁籤 ===")
+    dates = get_sheet_dates(exporter)
+    if not dates:
+        logger.error("Sheet 上無日期頁籤")
+        return
+
+    # Step 3: 逐日重跑
+    logger.info(f"=== Step 3: 重新計算並匯出 {len(dates)} 個日期 ===")
+    vcp_filter = VCPFilter()
+    sanxian_filter = SanxianFilter()
+
+    success = 0
+    failed = 0
+    for i, target in enumerate(dates):
+        ok = reexport_date(target, db, vcp_filter, sanxian_filter, exporter)
+        if ok:
+            success += 1
+        else:
+            failed += 1
 
         if i < len(dates) - 1:
-            logger.info(f"等待 {DELAY_BETWEEN_DATES} 秒（避免 Google API 限流）...")
-            time.sleep(DELAY_BETWEEN_DATES)
+            logger.info(f"等待 {DELAY_BETWEEN_EXPORTS} 秒...")
+            time.sleep(DELAY_BETWEEN_EXPORTS)
 
-    logger.info(f"=== 全部完成：{len(dates)} 個日期已重新匯出 ===")
+    logger.info(
+        f"=== 全部完成：成功 {success} 個, 失敗 {failed} 個, "
+        f"共 {len(dates)} 個日期 ==="
+    )
 
 
 if __name__ == "__main__":
