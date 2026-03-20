@@ -22,6 +22,49 @@ class USMovingAverageCalculator:
     """
 
     @staticmethod
+    def fix_zero_prices(
+        df: pd.DataFrame,
+        price_columns: tuple[str, ...] = (
+            "close_price", "open_price", "high_price", "low_price"
+        ),
+    ) -> pd.DataFrame:
+        """
+        修正零價異常：將 close_price=0 的資料用同一股票前一個交易日的值補齊
+
+        Args:
+            df: 股價 DataFrame（需包含 stock_id, date, close_price）
+            price_columns: 需要修正的價格欄位
+
+        Returns:
+            修正後的 DataFrame（新物件）
+        """
+        if df.empty:
+            return df
+
+        df = df.copy()
+        df = df.sort_values(["stock_id", "date"])
+
+        zero_mask = df["close_price"] == 0
+        zero_count = zero_mask.sum()
+
+        if zero_count == 0:
+            return df
+
+        for col in price_columns:
+            if col in df.columns:
+                df.loc[zero_mask, col] = np.nan
+                df[col] = df.groupby("stock_id")[col].ffill()
+
+        remaining = df["close_price"].isna().sum()
+        fixed = zero_count - remaining
+        if fixed > 0:
+            logger.info(f"已修正 {fixed} 筆零價異常（forward-fill 前一交易日收盤價）")
+        if remaining > 0:
+            logger.warning(f"仍有 {remaining} 筆無法補齊（該股票無前日資料）")
+
+        return df
+
+    @staticmethod
     def calculate_sma(
         df: pd.DataFrame,
         periods: list[int],
@@ -240,6 +283,9 @@ class USMovingAverageCalculator:
         """
         logger.info("準備美股 VCP 計算資料...")
 
+        # 修正零價異常
+        df = cls.fix_zero_prices(df)
+
         # 計算均線
         df = cls.calculate_sma(df, [50, 150, 200])
 
@@ -270,6 +316,9 @@ class USMovingAverageCalculator:
             包含所有三線開花所需欄位的 DataFrame
         """
         logger.info("準備美股三線開花計算資料...")
+
+        # 修正零價異常
+        df = cls.fix_zero_prices(df)
 
         # 計算均線 (8, 21, 55)
         df = cls.calculate_sma(df, [8, 21, 55])

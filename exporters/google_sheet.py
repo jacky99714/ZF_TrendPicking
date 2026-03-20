@@ -365,9 +365,9 @@ class GoogleSheetExporter:
 
             # SPEC: 資料排序依 "近20日股價漲幅" 降冪排序
             def sort_key_return(row):
-                """排序用：處理 None 和 NaN"""
+                """排序用：處理 None、NaN、inf"""
                 val = row.get("return_20d")
-                if val is None or (isinstance(val, float) and pd.isna(val)):
+                if val is None or (isinstance(val, float) and (pd.isna(val) or np.isinf(val))):
                     return float("-inf")
                 return val
 

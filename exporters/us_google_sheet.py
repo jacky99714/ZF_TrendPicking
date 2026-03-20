@@ -329,9 +329,9 @@ class USGoogleSheetExporter:
                 return f"{val * 100:.2f}%"
 
             def sort_key_return(row):
-                """排序用"""
+                """排序用：處理 None、NaN、inf"""
                 val = row.get("return_20d")
-                if val is None or (isinstance(val, float) and pd.isna(val)):
+                if val is None or (isinstance(val, float) and (pd.isna(val) or np.isinf(val))):
                     return float("-inf")
                 return val
 
