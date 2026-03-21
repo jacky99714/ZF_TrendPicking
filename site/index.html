@@ -346,7 +346,10 @@
       try {
         const resp = await fetch('data/filter_results.json');
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        DATA = await resp.json();
+        const text = await resp.text();
+        // 處理非標準 JSON 值（Infinity/-Infinity/NaN）
+        const sanitized = text.replace(/:\s*(-?Infinity|NaN)\b/g, ': null');
+        DATA = JSON.parse(sanitized);
 
         document.getElementById('statDate').textContent = DATA.generated_at;
         document.getElementById('statStocks').textContent = DATA.total_stocks.toLocaleString();
