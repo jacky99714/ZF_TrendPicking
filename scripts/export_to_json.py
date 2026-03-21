@@ -8,6 +8,7 @@
     site/data/filter_results.json
 """
 import json
+import math
 import os
 import sqlite3
 import sys
@@ -19,6 +20,19 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
 
 OUTPUT_DIR = BASE_DIR / "site" / "data"
+
+
+def safe_round(value, digits=2):
+    """將數值安全地四捨五入，過濾 None/inf/nan"""
+    if value is None:
+        return None
+    try:
+        f = float(value)
+        if math.isinf(f) or math.isnan(f):
+            return None
+        return round(f, digits)
+    except (ValueError, TypeError):
+        return None
 
 
 def export_tw(db_path: str) -> list[dict]:
@@ -60,28 +74,16 @@ def export_tw(db_path: str) -> list[dict]:
         }
 
         if row["filter_type"] == "vcp":
-            record["return_20d"] = (
-                round(row["return_20d"] * 100, 2)
-                if row["return_20d"] is not None
-                else None
+            record["return_20d"] = safe_round(
+                row["return_20d"] * 100 if row["return_20d"] is not None else None
             )
             record["is_strong"] = bool(row["is_strong_list"])
             record["is_new_high"] = bool(row["is_new_high_list"])
         else:
-            record["today_price"] = (
-                round(row["today_price"], 2)
-                if row["today_price"] is not None
-                else None
-            )
-            record["second_high"] = (
-                round(row["second_high_55d"], 2)
-                if row["second_high_55d"] is not None
-                else None
-            )
-            record["gap_ratio"] = (
-                round(row["gap_ratio"] * 100, 2)
-                if row["gap_ratio"] is not None
-                else None
+            record["today_price"] = safe_round(row["today_price"])
+            record["second_high"] = safe_round(row["second_high_55d"])
+            record["gap_ratio"] = safe_round(
+                row["gap_ratio"] * 100 if row["gap_ratio"] is not None else None
             )
 
         results.append(record)
@@ -130,28 +132,16 @@ def export_us(db_path: str) -> list[dict]:
         }
 
         if row["filter_type"] == "vcp":
-            record["return_20d"] = (
-                round(row["return_20d"] * 100, 2)
-                if row["return_20d"] is not None
-                else None
+            record["return_20d"] = safe_round(
+                row["return_20d"] * 100 if row["return_20d"] is not None else None
             )
             record["is_strong"] = bool(row["is_strong_list"])
             record["is_new_high"] = bool(row["is_new_high_list"])
         else:
-            record["today_price"] = (
-                round(row["today_price"], 2)
-                if row["today_price"] is not None
-                else None
-            )
-            record["second_high"] = (
-                round(row["second_high_55d"], 2)
-                if row["second_high_55d"] is not None
-                else None
-            )
-            record["gap_ratio"] = (
-                round(row["gap_ratio"] * 100, 2)
-                if row["gap_ratio"] is not None
-                else None
+            record["today_price"] = safe_round(row["today_price"])
+            record["second_high"] = safe_round(row["second_high_55d"])
+            record["gap_ratio"] = safe_round(
+                row["gap_ratio"] * 100 if row["gap_ratio"] is not None else None
             )
 
         results.append(record)
