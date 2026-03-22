@@ -202,7 +202,7 @@
 
     .tag {
       font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600;
-      position: relative; cursor: help;
+      position: relative; cursor: pointer;
     }
 
     .tag .tooltip {
@@ -211,7 +211,6 @@
       border-radius: 8px; padding: 10px 14px; font-size: 12px; font-weight: 400;
       color: var(--text); white-space: nowrap; z-index: 100;
       box-shadow: 0 4px 12px rgba(0,0,0,0.4); line-height: 1.8;
-      pointer-events: none;
     }
 
     .tag .tooltip::after {
@@ -220,12 +219,22 @@
       border-top-color: var(--border);
     }
 
+    /* Desktop hover + click toggle */
     .tag:hover .tooltip { display: block; }
+    .tag.tooltip-open .tooltip { display: block; }
 
     .tooltip .t-label { color: var(--text-dim); }
     .tooltip .t-val { color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
     .tooltip .t-pass { color: var(--green); }
     .tooltip .t-fail { color: var(--red); }
+
+    /* Tooltip 靠左/右邊界時不超出畫面 */
+    @media (max-width: 600px) {
+      .tag .tooltip {
+        left: 0; transform: none; max-width: 280px; white-space: normal;
+      }
+      .tag .tooltip::after { left: 20px; transform: none; }
+    }
     .tag.vcp { background: rgba(59, 130, 246, 0.15); color: var(--tag-vcp); }
     .tag.sanxian { background: rgba(168, 85, 247, 0.15); color: var(--tag-sanxian); }
     .tag.strong { background: rgba(34, 197, 94, 0.15); color: var(--tag-strong); }
@@ -480,7 +489,7 @@
         const merged = Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date));
         const appearanceHtml = merged.map(a => renderAppearanceRow(a)).join('');
 
-        return `<div class="stock-card" onclick="this.classList.toggle('open')">
+        return `<div class="stock-card" onclick="if(!event.target.closest('.tag'))this.classList.toggle('open')">
           <div class="stock-header">
             <div class="stock-info">
               <span class="market-badge ${stock.market}">${stock.market === 'tw' ? '台股' : '美股'}</span>
@@ -806,6 +815,24 @@
 
         triggerCurrentSearch();
       });
+    });
+
+    // Tag click to toggle tooltip (for mobile + desktop)
+    document.addEventListener('click', (e) => {
+      const tag = e.target.closest('.tag');
+      if (tag && tag.querySelector('.tooltip')) {
+        e.stopPropagation();
+        // Close all other tooltips
+        document.querySelectorAll('.tag.tooltip-open').forEach(t => {
+          if (t !== tag) t.classList.remove('tooltip-open');
+        });
+        tag.classList.toggle('tooltip-open');
+      } else {
+        // Click elsewhere closes all tooltips
+        document.querySelectorAll('.tag.tooltip-open').forEach(t => {
+          t.classList.remove('tooltip-open');
+        });
+      }
     });
 
     loadData();
