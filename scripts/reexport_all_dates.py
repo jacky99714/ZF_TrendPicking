@@ -229,6 +229,83 @@ def _get_prev_stock_ids(db: SQLiteDatabase, target_date: date, filter_type: str)
         return set()
 
 
+def export_from_db(
+    target_date: date,
+    db: SQLiteDatabase,
+    exporter: GoogleSheetExporter,
+):
+    """直接從 DB 讀取篩選結果匯出到 Sheet（不重算）"""
+    logger.info(f"=== 匯出 {target_date}（從 DB）===")
+
+    vcp_df = db.get_filter_results("vcp", target_date)
+    sanxian_df = db.get_filter_results("sanxian", target_date)
+
+    if vcp_df.empty and sanxian_df.empty:
+        logger.warning(f"{target_date}: DB 無篩選結果，跳過")
+        return False
+
+    # 轉成 export_vcp / export_sanxian 需要的 dict 格式
+    vcp_results = _df_to_export_dicts(vcp_df, "vcp") if not vcp_df.empty else []
+    sanxian_results = _df_to_export_dicts(sanxian_df, "sanxian") if not sanxian_df.empty else []
+
+    # 取得前一交易日的篩選結果（用於新/舊標記）
+    prev_vcp_ids = _get_prev_stock_ids(db, target_date, "vcp")
+    prev_sanxian_ids = _get_prev_stock_ids(db, target_date, "sanxian")
+
+    # 匯出到 Google Sheet（帶重試）
+    for attempt in range(3):
+        try:
+            if vcp_results:
+                exporter.export_vcp(
+                    vcp_results, target_date, prev_stock_ids=prev_vcp_ids
+                )
+            if sanxian_results:
+                exporter.export_sanxian(
+                    sanxian_results, target_date, prev_stock_ids=prev_sanxian_ids
+                )
+            break
+        except Exception as e:
+            if "429" in str(e) and attempt < 2:
+                wait = 30 * (attempt + 1)
+                logger.warning(f"API 限流，等待 {wait} 秒後重試...")
+                time.sleep(wait)
+            else:
+                logger.error(f"匯出失敗: {e}")
+                return False
+
+    logger.info(
+        f"{target_date} 完成: VCP {len(vcp_results)} 檔, "
+        f"三線開花 {len(sanxian_results)} 檔"
+    )
+    return True
+
+
+def _df_to_export_dicts(df: pd.DataFrame, filter_type: str) -> list[dict]:
+    """將 DB 的 filter_result DataFrame 轉成 exporter 需要的 dict 格式"""
+    results = []
+    for _, row in df.iterrows():
+        d = {}
+        d["stock_id"] = row.get("stock_id", "")
+        d["stock_name"] = row.get("stock_name", "")
+        d["company_name"] = row.get("stock_name", "")
+        d["industry_category"] = row.get("industry_category", "-") or "-"
+        d["industry_category2"] = "-"
+        d["product_mix"] = "-"
+
+        if filter_type == "vcp":
+            val = row.get("return_20d")
+            d["return_20d"] = float(val) if val is not None and not pd.isna(val) else None
+            d["is_strong"] = bool(row.get("is_strong_list"))
+            d["is_new_high"] = bool(row.get("is_new_high_list"))
+        else:
+            for col in ("today_price", "second_high_55d", "gap_ratio"):
+                val = row.get(col)
+                d[col] = float(val) if val is not None and not pd.isna(val) else None
+
+        results.append(d)
+    return results
+
+
 def reexport_date(
     target_date: date,
     db: SQLiteDatabase,
@@ -474,15 +551,21 @@ def main():
         f"{dates[0].isoformat()} ~ {dates[-1].isoformat()}"
     )
 
-    # Step 3: 逐日重跑
-    logger.info(f"=== Step 3: 重新計算並匯出 {len(dates)} 個日期 ===")
+    # Step 3: 逐日匯出
+    if args.from_db:
+        logger.info(f"=== Step 3: 從 DB 直接匯出 {len(dates)} 個日期（不重算）===")
+    else:
+        logger.info(f"=== Step 3: 重新計算並匯出 {len(dates)} 個日期 ===")
     vcp_filter = VCPFilter()
     sanxian_filter = SanxianFilter()
 
     success = 0
     failed = 0
     for i, target in enumerate(dates):
-        ok = reexport_date(target, db, vcp_filter, sanxian_filter, exporter)
+        if args.from_db:
+            ok = export_from_db(target, db, exporter)
+        else:
+            ok = reexport_date(target, db, vcp_filter, sanxian_filter, exporter)
         if ok:
             success += 1
         else:
