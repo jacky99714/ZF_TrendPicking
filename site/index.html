@@ -126,6 +126,17 @@
     .filter-btn:hover { border-color: var(--accent); color: var(--text); }
     .filter-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
 
+    /* Sort buttons (date mode only) */
+    .sort-row { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+    .sort-label { font-size: 13px; color: var(--text-dim); margin-right: 4px; }
+    .sort-btn {
+      padding: 5px 12px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text-dim); cursor: pointer;
+      font-size: 12px; transition: all 0.2s;
+    }
+    .sort-btn:hover { border-color: var(--accent); color: var(--text); }
+    .sort-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+
     /* Stats */
     .stats { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
 
@@ -337,6 +348,15 @@
       <button class="filter-btn" data-filter="sanxian">三線開花</button>
     </div>
 
+    <!-- Sort (date mode only) -->
+    <div class="sort-row hidden" id="sortRow">
+      <span class="sort-label">排序</span>
+      <button class="sort-btn active" data-sort="default">綜合</button>
+      <button class="sort-btn" data-sort="new-first">新股優先</button>
+      <button class="sort-btn" data-sort="return">20日漲幅</button>
+      <button class="sort-btn" data-sort="gap">突破差距</button>
+    </div>
+
     <div class="stats" id="stats">
       <div class="stat-card">
         <div class="label">資料更新</div>
@@ -370,6 +390,7 @@
     let ALL_DATES = [];    // sorted desc
     let currentMode = 'stock';
     let activeFilters = { market: 'all', type: 'all' };
+    let currentSort = 'default';
 
     async function loadData() {
       try {
@@ -599,13 +620,8 @@
         s.isNew = !prevStockIds.has(s.stock_id);
       }
 
-      // Sort: prioritize stocks with more tags, then by return_20d desc
-      merged.sort((a, b) => {
-        const aScore = (a.is_strong ? 1 : 0) + (a.is_new_high ? 1 : 0) + (a.is_sanxian ? 1 : 0);
-        const bScore = (b.is_strong ? 1 : 0) + (b.is_new_high ? 1 : 0) + (b.is_sanxian ? 1 : 0);
-        if (bScore !== aScore) return bScore - aScore;
-        return (b.return_20d || 0) - (a.return_20d || 0);
-      });
+      // Sort by selected mode
+      sortStocks(merged);
 
       // Stats
       const strongCount = merged.filter(s => s.is_strong).length;
@@ -667,6 +683,31 @@
       const prevDate = (idx >= 0 && idx < ALL_DATES.length - 1) ? ALL_DATES[idx + 1] : null;
       if (!prevDate || !DATE_INDEX[prevDate]) return new Set();
       return new Set(DATE_INDEX[prevDate].map(e => e.stock_id));
+    }
+
+    function sortStocks(arr) {
+      const safeNum = v => (v != null && isFinite(v)) ? v : -Infinity;
+      switch (currentSort) {
+        case 'new-first':
+          arr.sort((a, b) => {
+            if (a.isNew !== b.isNew) return a.isNew ? -1 : 1;
+            return safeNum(b.return_20d) - safeNum(a.return_20d);
+          });
+          break;
+        case 'return':
+          arr.sort((a, b) => safeNum(b.return_20d) - safeNum(a.return_20d));
+          break;
+        case 'gap':
+          arr.sort((a, b) => safeNum(b.gap_ratio) - safeNum(a.gap_ratio));
+          break;
+        default: // 'default' — 綜合：標籤數 > 漲幅
+          arr.sort((a, b) => {
+            const aScore = (a.is_strong ? 1 : 0) + (a.is_new_high ? 1 : 0) + (a.is_sanxian ? 1 : 0);
+            const bScore = (b.is_strong ? 1 : 0) + (b.is_new_high ? 1 : 0) + (b.is_sanxian ? 1 : 0);
+            if (bScore !== aScore) return bScore - aScore;
+            return safeNum(b.return_20d) - safeNum(a.return_20d);
+          });
+      }
     }
 
     function fmtVal(v) { return v != null ? v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-'; }
@@ -799,6 +840,7 @@
 
         document.getElementById('stockMode').classList.toggle('hidden', currentMode !== 'stock');
         document.getElementById('dateMode').classList.toggle('hidden', currentMode !== 'date');
+        document.getElementById('sortRow').classList.toggle('hidden', currentMode !== 'date');
 
         showEmptyState();
 
@@ -855,6 +897,16 @@
           document.querySelector('.filter-btn[data-filter="all"]').classList.add('active');
         }
 
+        triggerCurrentSearch();
+      });
+    });
+
+    // Sort buttons
+    document.querySelectorAll('.sort-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentSort = btn.dataset.sort;
         triggerCurrentSearch();
       });
     });
