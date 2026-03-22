@@ -192,7 +192,7 @@ def main():
                 "industry": r["industry"],
                 "appearances": [],
             }
-        stock_index[sid]["appearances"].append({
+        appearance = {
             "date": r["date"],
             "type": r["type"],
             **(
@@ -208,7 +208,10 @@ def main():
                     "gap_ratio": r.get("gap_ratio"),
                 }
             ),
-        })
+        }
+        if "ind" in r:
+            appearance["ind"] = r["ind"]
+        stock_index[sid]["appearances"].append(appearance)
 
     output = {
         "generated_at": date.today().isoformat(),
