@@ -31,188 +31,159 @@
       min-height: 100vh;
     }
 
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 24px 16px;
-    }
+    .container { max-width: 900px; margin: 0 auto; padding: 24px 16px; }
 
-    header {
-      text-align: center;
-      margin-bottom: 32px;
-    }
+    header { text-align: center; margin-bottom: 32px; }
 
     header h1 {
-      font-size: 28px;
-      font-weight: 700;
-      margin-bottom: 8px;
+      font-size: 28px; font-weight: 700; margin-bottom: 8px;
       background: linear-gradient(135deg, var(--accent), var(--tag-sanxian));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     }
 
-    header p {
-      color: var(--text-dim);
-      font-size: 14px;
-    }
+    header p { color: var(--text-dim); font-size: 14px; }
 
-    .search-box {
-      position: relative;
-      margin-bottom: 24px;
-    }
-
-    .search-box input {
-      width: 100%;
-      padding: 14px 20px 14px 48px;
-      font-size: 16px;
-      background: var(--surface);
+    /* Mode tabs */
+    .mode-tabs {
+      display: flex; gap: 0; margin-bottom: 24px;
+      background: var(--surface); border-radius: 12px; padding: 4px;
       border: 1px solid var(--border);
-      border-radius: 12px;
-      color: var(--text);
-      outline: none;
+    }
+
+    .mode-tab {
+      flex: 1; padding: 10px 16px; text-align: center;
+      border: none; background: transparent; color: var(--text-dim);
+      cursor: pointer; font-size: 14px; font-weight: 600;
+      border-radius: 8px; transition: all 0.2s;
+    }
+
+    .mode-tab:hover { color: var(--text); }
+    .mode-tab.active { background: var(--accent); color: white; }
+
+    /* Search box */
+    .search-box { position: relative; margin-bottom: 20px; }
+
+    .search-box input[type="text"] {
+      width: 100%; padding: 14px 20px 14px 48px; font-size: 16px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; color: var(--text); outline: none;
       transition: border-color 0.2s;
     }
 
-    .search-box input:focus {
-      border-color: var(--accent);
-    }
-
-    .search-box input::placeholder { color: var(--text-dim); }
+    .search-box input[type="text"]:focus { border-color: var(--accent); }
+    .search-box input[type="text"]::placeholder { color: var(--text-dim); }
 
     .search-box .search-icon {
-      position: absolute;
-      left: 16px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: var(--text-dim);
-      font-size: 18px;
+      position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+      color: var(--text-dim); font-size: 18px;
     }
 
-    .filters {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 24px;
-      flex-wrap: wrap;
+    /* Date picker row */
+    .date-picker-row {
+      display: flex; gap: 12px; margin-bottom: 20px; align-items: center;
     }
+
+    .date-picker-row input[type="date"] {
+      flex: 1; padding: 12px 16px; font-size: 15px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; color: var(--text); outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .date-picker-row input[type="date"]:focus { border-color: var(--accent); }
+
+    .date-picker-row input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(0.7);
+    }
+
+    .date-nav-btn {
+      padding: 10px 14px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; color: var(--text); cursor: pointer; font-size: 16px;
+      transition: all 0.2s; min-width: 44px; text-align: center;
+    }
+
+    .date-nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    .date-quick-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    .date-quick-btn {
+      padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text-dim); cursor: pointer;
+      font-size: 12px; transition: all 0.2s;
+    }
+
+    .date-quick-btn:hover { border-color: var(--accent); color: var(--text); }
+
+    /* Filters */
+    .filters { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
 
     .filter-btn {
-      padding: 6px 14px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      background: var(--surface);
-      color: var(--text-dim);
-      cursor: pointer;
-      font-size: 13px;
-      transition: all 0.2s;
+      padding: 6px 14px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text-dim); cursor: pointer;
+      font-size: 13px; transition: all 0.2s;
     }
 
     .filter-btn:hover { border-color: var(--accent); color: var(--text); }
-    .filter-btn.active {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: white;
-    }
+    .filter-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
 
-    .stats {
-      display: flex;
-      gap: 16px;
-      margin-bottom: 24px;
-      flex-wrap: wrap;
-    }
+    /* Stats */
+    .stats { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
 
     .stat-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 14px 20px;
-      flex: 1;
-      min-width: 120px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px 20px; flex: 1; min-width: 100px;
     }
 
     .stat-card .label { font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
     .stat-card .value { font-size: 22px; font-weight: 700; }
 
-    .loading {
-      text-align: center;
-      padding: 60px 0;
-      color: var(--text-dim);
-    }
+    /* Loading & empty */
+    .loading { text-align: center; padding: 60px 0; color: var(--text-dim); }
 
     .spinner {
-      display: inline-block;
-      width: 32px;
-      height: 32px;
-      border: 3px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      margin-bottom: 12px;
+      display: inline-block; width: 32px; height: 32px;
+      border: 3px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 12px;
     }
 
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    .results { display: flex; flex-direction: column; gap: 16px; }
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-dim); }
+    .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+    .empty-state p { font-size: 15px; }
+
+    /* Results */
+    .results { display: flex; flex-direction: column; gap: 12px; }
 
     .stock-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      overflow: hidden;
-      transition: border-color 0.2s;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden; transition: border-color 0.2s;
     }
 
     .stock-card:hover { border-color: var(--accent); }
 
     .stock-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px 20px;
-      cursor: pointer;
-      user-select: none;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px; cursor: pointer; user-select: none;
     }
 
     .stock-header:hover { background: rgba(99, 102, 241, 0.05); }
 
-    .stock-info {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
+    .stock-info { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
-    .stock-id {
-      font-size: 18px;
-      font-weight: 700;
-      color: var(--accent);
-    }
+    .stock-id { font-size: 18px; font-weight: 700; color: var(--accent); }
+    .stock-name { font-size: 15px; color: var(--text); }
 
-    .stock-name {
-      font-size: 15px;
-      color: var(--text);
-    }
-
-    .market-badge {
-      font-size: 11px;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-weight: 600;
-    }
-
+    .market-badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
     .market-badge.tw { background: #1e3a5f; color: #60a5fa; }
     .market-badge.us { background: #3b1f1f; color: #fca5a5; }
 
     .appearance-count {
-      font-size: 13px;
-      color: var(--text-dim);
-      display: flex;
-      align-items: center;
-      gap: 6px;
+      font-size: 13px; color: var(--text-dim);
+      display: flex; align-items: center; gap: 6px; white-space: nowrap;
     }
 
-    .appearance-count strong {
-      color: var(--text);
-      font-size: 18px;
-    }
+    .appearance-count strong { color: var(--text); font-size: 18px; }
 
     .stock-details { display: none; }
     .stock-card.open .stock-details { display: block; }
@@ -220,66 +191,56 @@
     .appearance-list { padding: 0 20px 16px; }
 
     .appearance-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 12px;
-      border-radius: 8px;
-      margin-bottom: 4px;
-      font-size: 14px;
-      background: rgba(255, 255, 255, 0.02);
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 8px; margin-bottom: 4px;
+      font-size: 14px; background: rgba(255, 255, 255, 0.02);
     }
 
     .appearance-item:hover { background: rgba(255, 255, 255, 0.05); }
 
-    .date-text {
-      font-weight: 600;
-      min-width: 100px;
-      font-variant-numeric: tabular-nums;
-    }
+    .date-text { font-weight: 600; min-width: 100px; font-variant-numeric: tabular-nums; }
 
-    .tag {
-      font-size: 11px;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-weight: 600;
-    }
-
+    .tag { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
     .tag.vcp { background: rgba(59, 130, 246, 0.15); color: var(--tag-vcp); }
     .tag.sanxian { background: rgba(168, 85, 247, 0.15); color: var(--tag-sanxian); }
     .tag.strong { background: rgba(34, 197, 94, 0.15); color: var(--tag-strong); }
     .tag.newhigh { background: rgba(245, 158, 11, 0.15); color: var(--tag-newhigh); }
 
     .detail-value {
-      font-size: 13px;
-      color: var(--text-dim);
-      margin-left: auto;
+      font-size: 13px; color: var(--text-dim); margin-left: auto;
       font-variant-numeric: tabular-nums;
     }
 
     .detail-value.positive { color: var(--green); }
     .detail-value.negative { color: var(--red); }
 
-    .empty-state {
-      text-align: center;
-      padding: 60px 20px;
-      color: var(--text-dim);
+    .industry-text { font-size: 12px; color: var(--text-dim); }
+
+    /* Date result section header */
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 0; margin-bottom: 8px; border-bottom: 1px solid var(--border);
     }
 
-    .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
-    .empty-state p { font-size: 15px; }
+    .section-title { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .section-count { font-size: 13px; color: var(--text-dim); }
 
-    .industry-text {
-      font-size: 12px;
-      color: var(--text-dim);
+    /* Date stock row (flat, no accordion) */
+    .date-stock-row {
+      display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; margin-bottom: 6px; font-size: 14px;
     }
 
-    footer {
-      text-align: center;
-      padding: 40px 0 20px;
-      color: var(--text-dim);
-      font-size: 12px;
-    }
+    .date-stock-row:hover { border-color: var(--accent); }
+
+    .date-stock-row .stock-id { font-size: 15px; min-width: 70px; }
+    .date-stock-row .stock-name { font-size: 14px; min-width: 100px; }
+    .date-stock-row .industry-text { flex: 1; }
+
+    footer { text-align: center; padding: 40px 0 20px; color: var(--text-dim); font-size: 12px; }
+
+    .hidden { display: none !important; }
 
     @media (max-width: 600px) {
       .container { padding: 16px 12px; }
@@ -287,7 +248,9 @@
       .stock-header { padding: 12px 14px; }
       .appearance-list { padding: 0 14px 12px; }
       .stats { gap: 8px; }
-      .stat-card { padding: 10px 14px; }
+      .stat-card { padding: 10px 14px; min-width: 80px; }
+      .date-stock-row { flex-wrap: wrap; gap: 6px; padding: 10px 12px; }
+      .date-stock-row .industry-text { flex: none; }
     }
   </style>
 </head>
@@ -295,14 +258,34 @@
   <div class="container">
     <header>
       <h1>ZF TrendPicking</h1>
-      <p>搜尋股票，查看出現在 VCP / 三線開花篩選的日期</p>
+      <p>搜尋股票或按日期查詢篩選清單</p>
     </header>
 
-    <div class="search-box">
-      <span class="search-icon">&#128269;</span>
-      <input type="text" id="searchInput" placeholder="輸入股票代號或名稱（例：2330、台積電、AAPL）" autocomplete="off">
+    <!-- Mode tabs -->
+    <div class="mode-tabs">
+      <button class="mode-tab active" data-mode="stock">搜尋股票</button>
+      <button class="mode-tab" data-mode="date">按日期查詢</button>
     </div>
 
+    <!-- Stock search (mode=stock) -->
+    <div id="stockMode">
+      <div class="search-box">
+        <span class="search-icon">&#128269;</span>
+        <input type="text" id="searchInput" placeholder="輸入股票代號或名稱（例：2330、台積電、AAPL）" autocomplete="off">
+      </div>
+    </div>
+
+    <!-- Date search (mode=date) -->
+    <div id="dateMode" class="hidden">
+      <div class="date-picker-row">
+        <button class="date-nav-btn" id="datePrev" title="前一個有資料的日期">&#9664;</button>
+        <input type="date" id="dateInput">
+        <button class="date-nav-btn" id="dateNext" title="後一個有資料的日期">&#9654;</button>
+      </div>
+      <div class="date-quick-btns" id="dateQuickBtns"></div>
+    </div>
+
+    <!-- Shared filters -->
     <div class="filters">
       <button class="filter-btn active" data-filter="all">全部</button>
       <button class="filter-btn" data-filter="tw">台股</button>
@@ -340,6 +323,9 @@
 
   <script>
     let DATA = null;
+    let DATE_INDEX = null; // { date -> [ {stock info + appearance} ] }
+    let ALL_DATES = [];    // sorted desc
+    let currentMode = 'stock';
     let activeFilters = { market: 'all', type: 'all' };
 
     async function loadData() {
@@ -347,7 +333,6 @@
         const resp = await fetch('data/filter_results.json');
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const text = await resp.text();
-        // 處理非標準 JSON 值（Infinity/-Infinity/NaN）
         const sanitized = text.replace(/:\s*(-?Infinity|NaN)\b/g, ': null');
         DATA = JSON.parse(sanitized);
 
@@ -355,44 +340,87 @@
         document.getElementById('statStocks').textContent = DATA.total_stocks.toLocaleString();
         document.getElementById('statRecords').textContent = DATA.total_records.toLocaleString();
 
-        document.getElementById('content').innerHTML =
-          '<div class="empty-state"><div class="icon">&#128270;</div><p>輸入股票代號或名稱開始搜尋</p></div>';
+        // Build date index
+        buildDateIndex();
+
+        showEmptyState();
       } catch (err) {
         document.getElementById('content').innerHTML =
           `<div class="empty-state"><div class="icon">&#9888;</div><p>載入資料失敗: ${err.message}</p></div>`;
       }
     }
 
-    function search(query) {
-      if (!DATA || !query.trim()) {
+    function buildDateIndex() {
+      DATE_INDEX = {};
+      for (const [sid, stock] of Object.entries(DATA.stocks)) {
+        for (const a of stock.appearances) {
+          if (!DATE_INDEX[a.date]) DATE_INDEX[a.date] = [];
+          DATE_INDEX[a.date].push({
+            stock_id: sid,
+            stock_name: stock.stock_name,
+            market: stock.market,
+            industry: stock.industry,
+            ...a
+          });
+        }
+      }
+      ALL_DATES = Object.keys(DATE_INDEX).sort().reverse();
+
+      // Set date input default and range
+      if (ALL_DATES.length > 0) {
+        const dateInput = document.getElementById('dateInput');
+        dateInput.value = ALL_DATES[0];
+        dateInput.min = ALL_DATES[ALL_DATES.length - 1];
+        dateInput.max = ALL_DATES[0];
+      }
+
+      // Build quick date buttons (last 10 dates)
+      const quickContainer = document.getElementById('dateQuickBtns');
+      const recentDates = ALL_DATES.slice(0, 10);
+      quickContainer.innerHTML = recentDates.map(d =>
+        `<button class="date-quick-btn" data-date="${d}">${d}</button>`
+      ).join('');
+
+      quickContainer.querySelectorAll('.date-quick-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.getElementById('dateInput').value = btn.dataset.date;
+          searchByDate(btn.dataset.date);
+        });
+      });
+    }
+
+    function showEmptyState() {
+      if (currentMode === 'stock') {
         document.getElementById('content').innerHTML =
           '<div class="empty-state"><div class="icon">&#128270;</div><p>輸入股票代號或名稱開始搜尋</p></div>';
-        return;
+      } else {
+        document.getElementById('content').innerHTML =
+          '<div class="empty-state"><div class="icon">&#128197;</div><p>選擇日期查看當天的篩選清單</p></div>';
       }
+    }
+
+    // ===== Stock search =====
+    function searchStock(query) {
+      if (!DATA || !query.trim()) { showEmptyState(); return; }
 
       const q = query.trim().toLowerCase();
       const matches = [];
 
       for (const [sid, stock] of Object.entries(DATA.stocks)) {
-        if (
-          sid.toLowerCase().includes(q) ||
-          stock.stock_name.toLowerCase().includes(q)
-        ) {
+        if (sid.toLowerCase().includes(q) || stock.stock_name.toLowerCase().includes(q)) {
           matches.push(stock);
         }
       }
 
-      // Apply market/type filters & sort
       const filtered = matches.map(stock => {
-        const filteredAppearances = stock.appearances.filter(a => {
+        const fa = stock.appearances.filter(a => {
           if (activeFilters.market !== 'all' && stock.market !== activeFilters.market) return false;
           if (activeFilters.type !== 'all' && a.type !== activeFilters.type) return false;
           return true;
         });
-        return { ...stock, appearances: filteredAppearances };
+        return { ...stock, appearances: fa };
       }).filter(s => s.appearances.length > 0);
 
-      // Sort by total appearances desc
       filtered.sort((a, b) => b.appearances.length - a.appearances.length);
 
       if (filtered.length === 0) {
@@ -401,41 +429,13 @@
         return;
       }
 
-      renderResults(filtered);
+      renderStockResults(filtered);
     }
 
-    function renderResults(stocks) {
+    function renderStockResults(stocks) {
       const html = stocks.map(stock => {
-        const sortedAppearances = [...stock.appearances].sort((a, b) => b.date.localeCompare(a.date));
-
-        const appearanceHtml = sortedAppearances.map(a => {
-          let tags = '';
-          let detail = '';
-
-          if (a.type === 'vcp') {
-            tags = `<span class="tag vcp">VCP</span>`;
-            if (a.is_strong) tags += `<span class="tag strong">強勢</span>`;
-            if (a.is_new_high) tags += `<span class="tag newhigh">新高</span>`;
-            if (a.return_20d != null) {
-              const cls = a.return_20d >= 0 ? 'positive' : 'negative';
-              const sign = a.return_20d >= 0 ? '+' : '';
-              detail = `<span class="detail-value ${cls}">${sign}${a.return_20d.toFixed(2)}%</span>`;
-            }
-          } else {
-            tags = `<span class="tag sanxian">三線開花</span>`;
-            if (a.gap_ratio != null) {
-              const cls = a.gap_ratio >= 0 ? 'positive' : 'negative';
-              const sign = a.gap_ratio >= 0 ? '+' : '';
-              detail = `<span class="detail-value ${cls}">差距 ${sign}${a.gap_ratio.toFixed(2)}%</span>`;
-            }
-          }
-
-          return `<div class="appearance-item">
-            <span class="date-text">${a.date}</span>
-            ${tags}
-            ${detail}
-          </div>`;
-        }).join('');
+        const sorted = [...stock.appearances].sort((a, b) => b.date.localeCompare(a.date));
+        const appearanceHtml = sorted.map(a => renderAppearanceRow(a)).join('');
 
         return `<div class="stock-card" onclick="this.classList.toggle('open')">
           <div class="stock-header">
@@ -458,17 +458,217 @@
       document.getElementById('content').innerHTML = `<div class="results">${html}</div>`;
     }
 
+    // ===== Date search =====
+    function searchByDate(dateStr) {
+      if (!DATE_INDEX) return;
+
+      // Find nearest date with data
+      let entries = DATE_INDEX[dateStr];
+      if (!entries) {
+        // Find closest date
+        const closest = ALL_DATES.reduce((prev, curr) =>
+          Math.abs(new Date(curr) - new Date(dateStr)) < Math.abs(new Date(prev) - new Date(dateStr)) ? curr : prev
+        );
+        if (closest) {
+          dateStr = closest;
+          document.getElementById('dateInput').value = closest;
+          entries = DATE_INDEX[closest];
+        }
+      }
+
+      if (!entries || entries.length === 0) {
+        document.getElementById('content').innerHTML =
+          `<div class="empty-state"><div class="icon">&#128533;</div><p>${dateStr} 沒有篩選資料</p></div>`;
+        return;
+      }
+
+      // Apply filters
+      const filtered = entries.filter(e => {
+        if (activeFilters.market !== 'all' && e.market !== activeFilters.market) return false;
+        if (activeFilters.type !== 'all' && e.type !== activeFilters.type) return false;
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        document.getElementById('content').innerHTML =
+          `<div class="empty-state"><div class="icon">&#128533;</div><p>${dateStr} 在目前篩選條件下沒有結果</p></div>`;
+        return;
+      }
+
+      renderDateResults(dateStr, filtered);
+    }
+
+    function renderDateResults(dateStr, entries) {
+      // Split by type
+      const vcpEntries = entries.filter(e => e.type === 'vcp');
+      const sanxianEntries = entries.filter(e => e.type === 'sanxian');
+
+      // Sort VCP by return_20d desc, sanxian by gap_ratio desc
+      vcpEntries.sort((a, b) => (b.return_20d || 0) - (a.return_20d || 0));
+      sanxianEntries.sort((a, b) => (b.gap_ratio || 0) - (a.gap_ratio || 0));
+
+      let html = '';
+
+      if (vcpEntries.length > 0) {
+        const strongCount = vcpEntries.filter(e => e.is_strong).length;
+        const newHighCount = vcpEntries.filter(e => e.is_new_high).length;
+        html += `<div class="section-header">
+          <div class="section-title">
+            <span class="tag vcp">VCP</span>
+            <span>強勢股篩選</span>
+          </div>
+          <div class="section-count">
+            共 ${vcpEntries.length} 檔（強勢 ${strongCount} / 新高 ${newHighCount}）
+          </div>
+        </div>`;
+        html += vcpEntries.map(e => renderDateStockRow(e)).join('');
+      }
+
+      if (sanxianEntries.length > 0) {
+        html += `<div class="section-header" style="margin-top: 16px;">
+          <div class="section-title">
+            <span class="tag sanxian">三線開花</span>
+            <span>篩選</span>
+          </div>
+          <div class="section-count">共 ${sanxianEntries.length} 檔</div>
+        </div>`;
+        html += sanxianEntries.map(e => renderDateStockRow(e)).join('');
+      }
+
+      document.getElementById('content').innerHTML = `<div class="results">${html}</div>`;
+    }
+
+    function renderDateStockRow(e) {
+      let tags = '';
+      let detail = '';
+
+      if (e.type === 'vcp') {
+        if (e.is_strong) tags += `<span class="tag strong">強勢</span> `;
+        if (e.is_new_high) tags += `<span class="tag newhigh">新高</span> `;
+        if (e.return_20d != null) {
+          const cls = e.return_20d >= 0 ? 'positive' : 'negative';
+          const sign = e.return_20d >= 0 ? '+' : '';
+          detail = `<span class="detail-value ${cls}">${sign}${e.return_20d.toFixed(2)}%</span>`;
+        }
+      } else {
+        if (e.gap_ratio != null) {
+          const cls = e.gap_ratio >= 0 ? 'positive' : 'negative';
+          const sign = e.gap_ratio >= 0 ? '+' : '';
+          detail = `<span class="detail-value ${cls}">差距 ${sign}${e.gap_ratio.toFixed(2)}%</span>`;
+        }
+      }
+
+      return `<div class="date-stock-row">
+        <span class="market-badge ${e.market}">${e.market === 'tw' ? '台' : '美'}</span>
+        <span class="stock-id">${escapeHtml(e.stock_id)}</span>
+        <span class="stock-name">${escapeHtml(e.stock_name)}</span>
+        ${tags}
+        <span class="industry-text">${escapeHtml(e.industry)}</span>
+        ${detail}
+      </div>`;
+    }
+
+    // ===== Shared helpers =====
+    function renderAppearanceRow(a) {
+      let tags = '';
+      let detail = '';
+
+      if (a.type === 'vcp') {
+        tags = `<span class="tag vcp">VCP</span>`;
+        if (a.is_strong) tags += `<span class="tag strong">強勢</span>`;
+        if (a.is_new_high) tags += `<span class="tag newhigh">新高</span>`;
+        if (a.return_20d != null) {
+          const cls = a.return_20d >= 0 ? 'positive' : 'negative';
+          const sign = a.return_20d >= 0 ? '+' : '';
+          detail = `<span class="detail-value ${cls}">${sign}${a.return_20d.toFixed(2)}%</span>`;
+        }
+      } else {
+        tags = `<span class="tag sanxian">三線開花</span>`;
+        if (a.gap_ratio != null) {
+          const cls = a.gap_ratio >= 0 ? 'positive' : 'negative';
+          const sign = a.gap_ratio >= 0 ? '+' : '';
+          detail = `<span class="detail-value ${cls}">差距 ${sign}${a.gap_ratio.toFixed(2)}%</span>`;
+        }
+      }
+
+      return `<div class="appearance-item">
+        <span class="date-text">${a.date}</span>
+        ${tags}
+        ${detail}
+      </div>`;
+    }
+
     function escapeHtml(str) {
       const div = document.createElement('div');
       div.textContent = str;
       return div.innerHTML;
     }
 
-    // Event listeners
-    document.getElementById('searchInput').addEventListener('input', (e) => {
-      search(e.target.value);
+    function triggerCurrentSearch() {
+      if (currentMode === 'stock') {
+        const q = document.getElementById('searchInput').value;
+        if (q.trim()) searchStock(q);
+      } else {
+        const d = document.getElementById('dateInput').value;
+        if (d) searchByDate(d);
+      }
+    }
+
+    function navigateDate(direction) {
+      const currentDate = document.getElementById('dateInput').value;
+      if (!currentDate || ALL_DATES.length === 0) return;
+
+      const idx = ALL_DATES.indexOf(currentDate);
+
+      if (direction === 'prev') {
+        // ALL_DATES is desc, so prev = next index
+        const newIdx = idx === -1 ? 0 : Math.min(idx + 1, ALL_DATES.length - 1);
+        document.getElementById('dateInput').value = ALL_DATES[newIdx];
+      } else {
+        const newIdx = idx === -1 ? 0 : Math.max(idx - 1, 0);
+        document.getElementById('dateInput').value = ALL_DATES[newIdx];
+      }
+
+      searchByDate(document.getElementById('dateInput').value);
+    }
+
+    // ===== Event listeners =====
+
+    // Mode tabs
+    document.querySelectorAll('.mode-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        currentMode = tab.dataset.mode;
+
+        document.getElementById('stockMode').classList.toggle('hidden', currentMode !== 'stock');
+        document.getElementById('dateMode').classList.toggle('hidden', currentMode !== 'date');
+
+        showEmptyState();
+
+        // Auto-trigger date search when switching to date mode
+        if (currentMode === 'date') {
+          const d = document.getElementById('dateInput').value;
+          if (d) searchByDate(d);
+        }
+      });
     });
 
+    // Stock search
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+      searchStock(e.target.value);
+    });
+
+    // Date input
+    document.getElementById('dateInput').addEventListener('change', (e) => {
+      searchByDate(e.target.value);
+    });
+
+    // Date navigation
+    document.getElementById('datePrev').addEventListener('click', () => navigateDate('prev'));
+    document.getElementById('dateNext').addEventListener('click', () => navigateDate('next'));
+
+    // Filter buttons
     document.querySelectorAll('.filter-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const filter = btn.dataset.filter;
@@ -485,9 +685,6 @@
           document.querySelectorAll('.filter-btn[data-filter="vcp"], .filter-btn[data-filter="sanxian"]')
             .forEach(b => b.classList.remove('active'));
           activeFilters.type = wasActive ? 'all' : filter;
-          if (!wasActive) {
-            // Deactivate "all" market button if a type filter is selected
-          }
         }
 
         if (filter === 'all') {
@@ -497,14 +694,12 @@
 
         btn.classList.toggle('active', !btn.classList.contains('active') || filter === 'all');
 
-        // Ensure "all" is active when no specific filters
         if (activeFilters.market === 'all' && activeFilters.type === 'all') {
           document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
           document.querySelector('.filter-btn[data-filter="all"]').classList.add('active');
         }
 
-        const query = document.getElementById('searchInput').value;
-        if (query.trim()) search(query);
+        triggerCurrentSearch();
       });
     });
 
