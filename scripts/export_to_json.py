@@ -57,7 +57,8 @@ def export_tw(db_path: str) -> list[dict]:
             fr.is_new_high_list,
             fr.today_price,
             fr.second_high_55d,
-            fr.gap_ratio
+            fr.gap_ratio,
+            fr.indicator_json
         FROM filter_result fr
         ORDER BY fr.filter_date DESC, fr.stock_id
     """)
@@ -85,6 +86,14 @@ def export_tw(db_path: str) -> list[dict]:
             record["gap_ratio"] = safe_round(
                 row["gap_ratio"] * 100 if row["gap_ratio"] is not None else None
             )
+
+        # 指標值
+        ind_raw = row["indicator_json"] if "indicator_json" in row.keys() else None
+        if ind_raw:
+            try:
+                record["ind"] = json.loads(ind_raw)
+            except (json.JSONDecodeError, TypeError):
+                pass
 
         results.append(record)
 
@@ -115,7 +124,8 @@ def export_us(db_path: str) -> list[dict]:
             fr.is_new_high_list,
             fr.today_price,
             fr.second_high_55d,
-            fr.gap_ratio
+            fr.gap_ratio,
+            fr.indicator_json
         FROM us_filter_result fr
         ORDER BY fr.filter_date DESC, fr.stock_id
     """)
@@ -143,6 +153,14 @@ def export_us(db_path: str) -> list[dict]:
             record["gap_ratio"] = safe_round(
                 row["gap_ratio"] * 100 if row["gap_ratio"] is not None else None
             )
+
+        # 指標值
+        ind_raw = row["indicator_json"] if "indicator_json" in row.keys() else None
+        if ind_raw:
+            try:
+                record["ind"] = json.loads(ind_raw)
+            except (json.JSONDecodeError, TypeError):
+                pass
 
         results.append(record)
 

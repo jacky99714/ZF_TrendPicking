@@ -200,7 +200,32 @@
 
     .date-text { font-weight: 600; min-width: 100px; font-variant-numeric: tabular-nums; }
 
-    .tag { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
+    .tag {
+      font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600;
+      position: relative; cursor: help;
+    }
+
+    .tag .tooltip {
+      display: none; position: absolute; bottom: calc(100% + 8px); left: 50%;
+      transform: translateX(-50%); background: #1e2030; border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 14px; font-size: 12px; font-weight: 400;
+      color: var(--text); white-space: nowrap; z-index: 100;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4); line-height: 1.8;
+      pointer-events: none;
+    }
+
+    .tag .tooltip::after {
+      content: ''; position: absolute; top: 100%; left: 50%;
+      transform: translateX(-50%); border: 6px solid transparent;
+      border-top-color: var(--border);
+    }
+
+    .tag:hover .tooltip { display: block; }
+
+    .tooltip .t-label { color: var(--text-dim); }
+    .tooltip .t-val { color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
+    .tooltip .t-pass { color: var(--green); }
+    .tooltip .t-fail { color: var(--red); }
     .tag.vcp { background: rgba(59, 130, 246, 0.15); color: var(--tag-vcp); }
     .tag.sanxian { background: rgba(168, 85, 247, 0.15); color: var(--tag-sanxian); }
     .tag.strong { background: rgba(34, 197, 94, 0.15); color: var(--tag-strong); }
@@ -438,16 +463,18 @@
         const byDate = {};
         for (const a of stock.appearances) {
           if (!byDate[a.date]) {
-            byDate[a.date] = { date: a.date, is_strong: false, is_new_high: false, is_sanxian: false, return_20d: null, gap_ratio: null };
+            byDate[a.date] = { date: a.date, is_strong: false, is_new_high: false, is_sanxian: false, return_20d: null, gap_ratio: null, vcp_ind: null, sanxian_ind: null };
           }
           const d = byDate[a.date];
           if (a.type === 'vcp') {
             if (a.is_strong) d.is_strong = true;
             if (a.is_new_high) d.is_new_high = true;
             if (a.return_20d != null) d.return_20d = a.return_20d;
+            if (a.ind) d.vcp_ind = a.ind;
           } else {
             d.is_sanxian = true;
             if (a.gap_ratio != null) d.gap_ratio = a.gap_ratio;
+            if (a.ind) d.sanxian_ind = a.ind;
           }
         }
         const merged = Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date));
@@ -529,6 +556,8 @@
             is_sanxian: false,
             return_20d: null,
             gap_ratio: null,
+            vcp_ind: null,
+            sanxian_ind: null,
           };
         }
         const s = stockMap[e.stock_id];
@@ -536,9 +565,11 @@
           if (e.is_strong) s.is_strong = true;
           if (e.is_new_high) s.is_new_high = true;
           if (e.return_20d != null) s.return_20d = e.return_20d;
+          if (e.ind) s.vcp_ind = e.ind;
         } else {
           s.is_sanxian = true;
           if (e.gap_ratio != null) s.gap_ratio = e.gap_ratio;
+          if (e.ind) s.sanxian_ind = e.ind;
         }
       }
 
@@ -571,11 +602,7 @@
     }
 
     function renderDateStockRow(s) {
-      let tags = '';
-      if (s.is_strong) tags += `<span class="tag strong">VCP強勢</span> `;
-      if (s.is_new_high) tags += `<span class="tag newhigh">VCP新高</span> `;
-      if (s.is_sanxian) tags += `<span class="tag sanxian">三線開花</span> `;
-
+      const tags = buildTags(s);
       let details = '';
       if (s.return_20d != null) {
         const cls = s.return_20d >= 0 ? 'positive' : 'negative';
@@ -599,13 +626,64 @@
     }
 
     // ===== Shared helpers =====
-    function renderAppearanceRow(a) {
-      let tags = '';
-      let details = '';
+    function fmtVal(v) { return v != null ? v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-'; }
+    function fmtPct(v) { return v != null ? (v * 100).toFixed(2) + '%' : '-'; }
 
-      if (a.is_strong) tags += `<span class="tag strong">VCP強勢</span>`;
-      if (a.is_new_high) tags += `<span class="tag newhigh">VCP新高</span>`;
-      if (a.is_sanxian) tags += `<span class="tag sanxian">三線開花</span>`;
+    function buildVcpStrongTooltip(ind) {
+      if (!ind) return '';
+      return `<span class="tooltip">
+        <span class="t-label">收盤</span> <span class="t-val">${fmtVal(ind.close)}</span><br>
+        <span class="t-label">條件: 收盤 &gt; MA50 &gt; MA150 &gt; MA200</span><br>
+        <span class="t-label">MA50</span> <span class="t-val">${fmtVal(ind.ma50)}</span> &gt;
+        <span class="t-label">MA150</span> <span class="t-val">${fmtVal(ind.ma150)}</span> &gt;
+        <span class="t-label">MA200</span> <span class="t-val">${fmtVal(ind.ma200)}</span><br>
+        <span class="t-label">MA200趨勢</span> <span class="t-val">${ind.ma200_slope != null ? (ind.ma200_slope > 0 ? '↑ 上升' : '↓ 下降') : '-'}</span> (${fmtVal(ind.ma200_slope)})<br>
+        <span class="t-label">20日漲幅</span> <span class="t-val">${fmtPct(ind.return_20d)}</span> &gt; 大盤 <span class="t-val">${fmtPct(ind.market_return)}</span>
+      </span>`;
+    }
+
+    function buildVcpNewHighTooltip(ind) {
+      if (!ind) return '';
+      const gap = (ind.high_5d && ind.high_252d) ? Math.abs(ind.high_5d / ind.high_252d - 1) : null;
+      return `<span class="tooltip">
+        <span class="t-label">條件: 5日高點 ≈ 52週高點 (≤10%)</span><br>
+        <span class="t-label">5日高點</span> <span class="t-val">${fmtVal(ind.high_5d)}</span><br>
+        <span class="t-label">52週高點</span> <span class="t-val">${fmtVal(ind.high_252d)}</span><br>
+        <span class="t-label">差距</span> <span class="t-val">${gap != null ? (gap * 100).toFixed(2) + '%' : '-'}</span><br>
+        <span class="t-label">20日漲幅</span> <span class="t-val">${fmtPct(ind.return_20d)}</span> &gt; 大盤 <span class="t-val">${fmtPct(ind.market_return)}</span>
+      </span>`;
+    }
+
+    function buildSanxianTooltip(ind) {
+      if (!ind) return '';
+      return `<span class="tooltip">
+        <span class="t-label">收盤</span> <span class="t-val">${fmtVal(ind.close)}</span><br>
+        <span class="t-label">條件: 收盤 &gt; MA8 &gt; MA21 &gt; MA55</span><br>
+        <span class="t-label">MA8</span> <span class="t-val">${fmtVal(ind.ma8)}</span> &gt;
+        <span class="t-label">MA21</span> <span class="t-val">${fmtVal(ind.ma21)}</span> &gt;
+        <span class="t-label">MA55</span> <span class="t-val">${fmtVal(ind.ma55)}</span><br>
+        <span class="t-label">55日高點</span> <span class="t-val">${fmtVal(ind.high_55d)}</span>
+        <span class="t-label">次高價</span> <span class="t-val">${fmtVal(ind.second_high)}</span>
+      </span>`;
+    }
+
+    function buildTags(item) {
+      let tags = '';
+      if (item.is_strong) {
+        tags += `<span class="tag strong">VCP強勢${buildVcpStrongTooltip(item.vcp_ind)}</span> `;
+      }
+      if (item.is_new_high) {
+        tags += `<span class="tag newhigh">VCP新高${buildVcpNewHighTooltip(item.vcp_ind)}</span> `;
+      }
+      if (item.is_sanxian) {
+        tags += `<span class="tag sanxian">三線開花${buildSanxianTooltip(item.sanxian_ind)}</span> `;
+      }
+      return tags;
+    }
+
+    function renderAppearanceRow(a) {
+      const tags = buildTags(a);
+      let details = '';
 
       if (a.return_20d != null) {
         const cls = a.return_20d >= 0 ? 'positive' : 'negative';

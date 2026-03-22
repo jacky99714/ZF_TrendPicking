@@ -11,6 +11,7 @@ from typing import Optional
 
 from sqlalchemy import (
     String,
+    Text,
     Integer,
     BigInteger,
     Boolean,
@@ -190,6 +191,11 @@ class FilterResult(Base):
     )
     gap_ratio: Mapped[Optional[Decimal]] = mapped_column(
         Numeric(8, 4), nullable=True, comment="差距比例"
+    )
+
+    # 指標詳情（JSON 格式，供前端 tooltip 顯示）
+    indicator_json: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True, comment="篩選指標原始值 (JSON)"
     )
 
     created_at: Mapped[datetime] = mapped_column(

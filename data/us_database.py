@@ -423,6 +423,7 @@ class USSQLiteDatabase:
                     "today_price": r.get("today_price"),
                     "second_high_55d": r.get("second_high_55d"),
                     "gap_ratio": r.get("gap_ratio"),
+                    "indicator_json": r.get("indicator_json"),
                 }
                 for r in results
             ]
