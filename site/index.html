@@ -434,8 +434,24 @@
 
     function renderStockResults(stocks) {
       const html = stocks.map(stock => {
-        const sorted = [...stock.appearances].sort((a, b) => b.date.localeCompare(a.date));
-        const appearanceHtml = sorted.map(a => renderAppearanceRow(a)).join('');
+        // Merge appearances by date
+        const byDate = {};
+        for (const a of stock.appearances) {
+          if (!byDate[a.date]) {
+            byDate[a.date] = { date: a.date, is_strong: false, is_new_high: false, is_sanxian: false, return_20d: null, gap_ratio: null };
+          }
+          const d = byDate[a.date];
+          if (a.type === 'vcp') {
+            if (a.is_strong) d.is_strong = true;
+            if (a.is_new_high) d.is_new_high = true;
+            if (a.return_20d != null) d.return_20d = a.return_20d;
+          } else {
+            d.is_sanxian = true;
+            if (a.gap_ratio != null) d.gap_ratio = a.gap_ratio;
+          }
+        }
+        const merged = Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date));
+        const appearanceHtml = merged.map(a => renderAppearanceRow(a)).join('');
 
         return `<div class="stock-card" onclick="this.classList.toggle('open')">
           <div class="stock-header">
@@ -446,7 +462,7 @@
               <span class="industry-text">${escapeHtml(stock.industry)}</span>
             </div>
             <div class="appearance-count">
-              出現 <strong>${stock.appearances.length}</strong> 次
+              出現 <strong>${merged.length}</strong> 天
             </div>
           </div>
           <div class="stock-details">
@@ -499,102 +515,113 @@
     }
 
     function renderDateResults(dateStr, entries) {
-      // Split by type
-      const vcpEntries = entries.filter(e => e.type === 'vcp');
-      const sanxianEntries = entries.filter(e => e.type === 'sanxian');
-
-      // Sort VCP by return_20d desc, sanxian by gap_ratio desc
-      vcpEntries.sort((a, b) => (b.return_20d || 0) - (a.return_20d || 0));
-      sanxianEntries.sort((a, b) => (b.gap_ratio || 0) - (a.gap_ratio || 0));
-
-      let html = '';
-
-      if (vcpEntries.length > 0) {
-        const strongCount = vcpEntries.filter(e => e.is_strong).length;
-        const newHighCount = vcpEntries.filter(e => e.is_new_high).length;
-        html += `<div class="section-header">
-          <div class="section-title">
-            <span class="tag vcp">VCP</span>
-            <span>強勢股篩選</span>
-          </div>
-          <div class="section-count">
-            共 ${vcpEntries.length} 檔（強勢 ${strongCount} / 新高 ${newHighCount}）
-          </div>
-        </div>`;
-        html += vcpEntries.map(e => renderDateStockRow(e)).join('');
+      // Merge by stock_id: combine VCP + sanxian into one row per stock
+      const stockMap = {};
+      for (const e of entries) {
+        if (!stockMap[e.stock_id]) {
+          stockMap[e.stock_id] = {
+            stock_id: e.stock_id,
+            stock_name: e.stock_name,
+            market: e.market,
+            industry: e.industry,
+            is_strong: false,
+            is_new_high: false,
+            is_sanxian: false,
+            return_20d: null,
+            gap_ratio: null,
+          };
+        }
+        const s = stockMap[e.stock_id];
+        if (e.type === 'vcp') {
+          if (e.is_strong) s.is_strong = true;
+          if (e.is_new_high) s.is_new_high = true;
+          if (e.return_20d != null) s.return_20d = e.return_20d;
+        } else {
+          s.is_sanxian = true;
+          if (e.gap_ratio != null) s.gap_ratio = e.gap_ratio;
+        }
       }
 
-      if (sanxianEntries.length > 0) {
-        html += `<div class="section-header" style="margin-top: 16px;">
-          <div class="section-title">
-            <span class="tag sanxian">三線開花</span>
-            <span>篩選</span>
-          </div>
-          <div class="section-count">共 ${sanxianEntries.length} 檔</div>
-        </div>`;
-        html += sanxianEntries.map(e => renderDateStockRow(e)).join('');
-      }
+      const merged = Object.values(stockMap);
+
+      // Sort: prioritize stocks with more tags, then by return_20d desc
+      merged.sort((a, b) => {
+        const aScore = (a.is_strong ? 1 : 0) + (a.is_new_high ? 1 : 0) + (a.is_sanxian ? 1 : 0);
+        const bScore = (b.is_strong ? 1 : 0) + (b.is_new_high ? 1 : 0) + (b.is_sanxian ? 1 : 0);
+        if (bScore !== aScore) return bScore - aScore;
+        return (b.return_20d || 0) - (a.return_20d || 0);
+      });
+
+      // Stats
+      const strongCount = merged.filter(s => s.is_strong).length;
+      const newHighCount = merged.filter(s => s.is_new_high).length;
+      const sanxianCount = merged.filter(s => s.is_sanxian).length;
+      const bothCount = merged.filter(s => (s.is_strong || s.is_new_high) && s.is_sanxian).length;
+
+      let html = `<div class="section-header">
+        <div class="section-title"><span>${dateStr}</span></div>
+        <div class="section-count">
+          共 ${merged.length} 檔（VCP強勢 ${strongCount} / VCP新高 ${newHighCount} / 三線開花 ${sanxianCount}${bothCount > 0 ? ` / 同時上榜 ${bothCount}` : ''}）
+        </div>
+      </div>`;
+
+      html += merged.map(s => renderDateStockRow(s)).join('');
 
       document.getElementById('content').innerHTML = `<div class="results">${html}</div>`;
     }
 
-    function renderDateStockRow(e) {
+    function renderDateStockRow(s) {
       let tags = '';
-      let detail = '';
+      if (s.is_strong) tags += `<span class="tag strong">VCP強勢</span> `;
+      if (s.is_new_high) tags += `<span class="tag newhigh">VCP新高</span> `;
+      if (s.is_sanxian) tags += `<span class="tag sanxian">三線開花</span> `;
 
-      if (e.type === 'vcp') {
-        if (e.is_strong) tags += `<span class="tag strong">強勢</span> `;
-        if (e.is_new_high) tags += `<span class="tag newhigh">新高</span> `;
-        if (e.return_20d != null) {
-          const cls = e.return_20d >= 0 ? 'positive' : 'negative';
-          const sign = e.return_20d >= 0 ? '+' : '';
-          detail = `<span class="detail-value ${cls}">${sign}${e.return_20d.toFixed(2)}%</span>`;
-        }
-      } else {
-        if (e.gap_ratio != null) {
-          const cls = e.gap_ratio >= 0 ? 'positive' : 'negative';
-          const sign = e.gap_ratio >= 0 ? '+' : '';
-          detail = `<span class="detail-value ${cls}">差距 ${sign}${e.gap_ratio.toFixed(2)}%</span>`;
-        }
+      let details = '';
+      if (s.return_20d != null) {
+        const cls = s.return_20d >= 0 ? 'positive' : 'negative';
+        const sign = s.return_20d >= 0 ? '+' : '';
+        details += `<span class="detail-value ${cls}">${sign}${s.return_20d.toFixed(2)}%</span>`;
+      }
+      if (s.gap_ratio != null) {
+        const cls = s.gap_ratio >= 0 ? 'positive' : 'negative';
+        const sign = s.gap_ratio >= 0 ? '+' : '';
+        details += `<span class="detail-value ${cls}">差距${sign}${s.gap_ratio.toFixed(2)}%</span>`;
       }
 
       return `<div class="date-stock-row">
-        <span class="market-badge ${e.market}">${e.market === 'tw' ? '台' : '美'}</span>
-        <span class="stock-id">${escapeHtml(e.stock_id)}</span>
-        <span class="stock-name">${escapeHtml(e.stock_name)}</span>
+        <span class="market-badge ${s.market}">${s.market === 'tw' ? '台' : '美'}</span>
+        <span class="stock-id">${escapeHtml(s.stock_id)}</span>
+        <span class="stock-name">${escapeHtml(s.stock_name)}</span>
         ${tags}
-        <span class="industry-text">${escapeHtml(e.industry)}</span>
-        ${detail}
+        <span class="industry-text">${escapeHtml(s.industry)}</span>
+        ${details}
       </div>`;
     }
 
     // ===== Shared helpers =====
     function renderAppearanceRow(a) {
       let tags = '';
-      let detail = '';
+      let details = '';
 
-      if (a.type === 'vcp') {
-        tags = `<span class="tag vcp">VCP</span>`;
-        if (a.is_strong) tags += `<span class="tag strong">強勢</span>`;
-        if (a.is_new_high) tags += `<span class="tag newhigh">新高</span>`;
-        if (a.return_20d != null) {
-          const cls = a.return_20d >= 0 ? 'positive' : 'negative';
-          const sign = a.return_20d >= 0 ? '+' : '';
-          detail = `<span class="detail-value ${cls}">${sign}${a.return_20d.toFixed(2)}%</span>`;
-        }
-      } else {
-        tags = `<span class="tag sanxian">三線開花</span>`;
-        if (a.gap_ratio != null) {
-          const cls = a.gap_ratio >= 0 ? 'positive' : 'negative';
-          const sign = a.gap_ratio >= 0 ? '+' : '';
-          detail = `<span class="detail-value ${cls}">差距 ${sign}${a.gap_ratio.toFixed(2)}%</span>`;
-        }
+      if (a.is_strong) tags += `<span class="tag strong">VCP強勢</span>`;
+      if (a.is_new_high) tags += `<span class="tag newhigh">VCP新高</span>`;
+      if (a.is_sanxian) tags += `<span class="tag sanxian">三線開花</span>`;
+
+      if (a.return_20d != null) {
+        const cls = a.return_20d >= 0 ? 'positive' : 'negative';
+        const sign = a.return_20d >= 0 ? '+' : '';
+        details += `<span class="detail-value ${cls}">${sign}${a.return_20d.toFixed(2)}%</span>`;
+      }
+      if (a.gap_ratio != null) {
+        const cls = a.gap_ratio >= 0 ? 'positive' : 'negative';
+        const sign = a.gap_ratio >= 0 ? '+' : '';
+        details += `<span class="detail-value ${cls}">差距${sign}${a.gap_ratio.toFixed(2)}%</span>`;
       }
 
       return `<div class="appearance-item">
         <span class="date-text">${a.date}</span>
         ${tags}
-        ${detail}
+        ${details}
       </div>`;
     }
 
