@@ -45,7 +45,13 @@ def export_tw(db_path: str) -> list[dict]:
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    cursor.execute("""
+    # 檢查 indicator_json 欄位是否存在
+    cursor.execute("PRAGMA table_info(filter_result)")
+    columns = {row[1] for row in cursor.fetchall()}
+    has_indicator = "indicator_json" in columns
+    ind_col = ", fr.indicator_json" if has_indicator else ""
+
+    cursor.execute(f"""
         SELECT
             fr.filter_date,
             fr.filter_type,
@@ -57,8 +63,8 @@ def export_tw(db_path: str) -> list[dict]:
             fr.is_new_high_list,
             fr.today_price,
             fr.second_high_55d,
-            fr.gap_ratio,
-            fr.indicator_json
+            fr.gap_ratio
+            {ind_col}
         FROM filter_result fr
         ORDER BY fr.filter_date DESC, fr.stock_id
     """)
@@ -112,7 +118,13 @@ def export_us(db_path: str) -> list[dict]:
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    cursor.execute("""
+    # 檢查 indicator_json 欄位是否存在
+    cursor.execute("PRAGMA table_info(us_filter_result)")
+    columns = {row[1] for row in cursor.fetchall()}
+    has_indicator = "indicator_json" in columns
+    ind_col = ", fr.indicator_json" if has_indicator else ""
+
+    cursor.execute(f"""
         SELECT
             fr.filter_date,
             fr.filter_type,
@@ -124,8 +136,8 @@ def export_us(db_path: str) -> list[dict]:
             fr.is_new_high_list,
             fr.today_price,
             fr.second_high_55d,
-            fr.gap_ratio,
-            fr.indicator_json
+            fr.gap_ratio
+            {ind_col}
         FROM us_filter_result fr
         ORDER BY fr.filter_date DESC, fr.stock_id
     """)
