@@ -184,6 +184,33 @@ def get_sheet_dates(exporter: GoogleSheetExporter) -> list[date]:
     return dates
 
 
+def get_db_filter_dates(db: SQLiteDatabase, since: str = "") -> list[date]:
+    """從 DB 的 filter_result 讀取所有日期"""
+    import sqlite3
+    from config.settings import SQLITE_DB_PATH
+
+    conn = sqlite3.connect(SQLITE_DB_PATH)
+    query = "SELECT DISTINCT filter_date FROM filter_result"
+    params = ()
+    if since:
+        query += " WHERE filter_date >= ?"
+        params = (since,)
+    query += " ORDER BY filter_date"
+
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+
+    dates = []
+    for r in rows:
+        try:
+            dates.append(date.fromisoformat(r[0]))
+        except ValueError:
+            continue
+
+    logger.info(f"DB 中找到 {len(dates)} 個篩選日期")
+    return dates
+
+
 # ==================== Step 3: 重新計算並匯出 ====================
 
 
@@ -393,6 +420,18 @@ def main():
         "--last", type=int, default=0,
         help="只重跑最近 N 個日期（0 = 全部）"
     )
+    parser.add_argument(
+        "--from-db", action="store_true",
+        help="從 DB 的 filter_result 讀取日期（而非 Sheet 頁籤）"
+    )
+    parser.add_argument(
+        "--since", type=str, default="",
+        help="搭配 --from-db，只匯出此日期之後的資料（YYYY-MM-DD）"
+    )
+    parser.add_argument(
+        "--offset", type=int, default=0,
+        help="跳過前 N 個日期（搭配 --last 分批用）"
+    )
     args = parser.parse_args()
 
     db = SQLiteDatabase()
@@ -409,17 +448,31 @@ def main():
     else:
         logger.info("跳過 backfill")
 
-    # Step 2: 讀取 Sheet 日期
-    logger.info("=== Step 2: 讀取 Sheet 日期頁籤 ===")
-    dates = get_sheet_dates(exporter)
+    # Step 2: 取得日期清單
+    if args.from_db:
+        logger.info("=== Step 2: 從 DB 讀取篩選結果日期 ===")
+        dates = get_db_filter_dates(db, args.since)
+    else:
+        logger.info("=== Step 2: 讀取 Sheet 日期頁籤 ===")
+        dates = get_sheet_dates(exporter)
+
     if not dates:
-        logger.error("Sheet 上無日期頁籤")
+        logger.error("沒有找到任何日期")
         return
+
+    # 跳過前 N 個日期（分批用）
+    if args.offset > 0:
+        dates = dates[args.offset:]
+        logger.info(f"跳過前 {args.offset} 個日期")
 
     # 如果指定 --last N，只取最近 N 個日期
     if args.last > 0:
         dates = dates[-args.last:]
-        logger.info(f"只重跑最近 {args.last} 個日期: {[d.isoformat() for d in dates]}")
+
+    logger.info(
+        f"即將處理 {len(dates)} 個日期: "
+        f"{dates[0].isoformat()} ~ {dates[-1].isoformat()}"
+    )
 
     # Step 3: 逐日重跑
     logger.info(f"=== Step 3: 重新計算並匯出 {len(dates)} 個日期 ===")
