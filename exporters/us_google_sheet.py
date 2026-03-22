@@ -276,7 +276,8 @@ class USGoogleSheetExporter:
         self,
         data: list[dict],
         target_date: date,
-        sheet_id: Optional[str] = None
+        sheet_id: Optional[str] = None,
+        prev_stock_ids: Optional[set] = None
     ) -> bool:
         """
         匯出美股 VCP 篩選結果
@@ -285,6 +286,7 @@ class USGoogleSheetExporter:
             data: VCP 篩選結果列表
             target_date: 篩選日期
             sheet_id: Sheet ID
+            prev_stock_ids: 前一交易日的 VCP 股票代號集合（用於標記新/舊）
 
         Returns:
             是否成功
@@ -354,6 +356,12 @@ class USGoogleSheetExporter:
 
             worksheet.update(rows, "A1")
 
+            # 標記新/舊股票背景色
+            if prev_stock_ids is not None:
+                self._apply_new_old_colors(
+                    worksheet, sorted_data, prev_stock_ids, len(rows[0])
+                )
+
             logger.info(f"美股 VCP 篩選結果匯出完成: {len(data)} 筆 -> {tab_name}")
 
             # 自動排序頁籤
@@ -384,7 +392,8 @@ class USGoogleSheetExporter:
         self,
         data: list[dict],
         target_date: date,
-        sheet_id: Optional[str] = None
+        sheet_id: Optional[str] = None,
+        prev_stock_ids: Optional[set] = None
     ) -> bool:
         """
         匯出美股三線開花篩選結果
@@ -393,6 +402,7 @@ class USGoogleSheetExporter:
             data: 三線開花篩選結果列表
             target_date: 篩選日期
             sheet_id: Sheet ID
+            prev_stock_ids: 前一交易日的三線開花股票代號集合（用於標記新/舊）
 
         Returns:
             是否成功
@@ -465,6 +475,12 @@ class USGoogleSheetExporter:
 
             worksheet.update(rows, "A1")
 
+            # 標記新/舊股票背景色
+            if prev_stock_ids is not None:
+                self._apply_new_old_colors(
+                    worksheet, sorted_data, prev_stock_ids, len(rows[0])
+                )
+
             logger.info(f"美股三線開花篩選結果匯出完成: {len(data)} 筆 -> {tab_name}")
 
             self.sort_worksheets_by_date(sheet_id)
@@ -487,6 +503,71 @@ class USGoogleSheetExporter:
         except Exception as e:
             logger.error(f"美股三線開花匯出失敗: {e}")
             return False
+
+    # ==================== 新/舊股票背景色 ====================
+
+    def _apply_new_old_colors(
+        self,
+        worksheet,
+        sorted_data: list[dict],
+        prev_stock_ids: set,
+        col_count: int
+    ):
+        """
+        對每一行設定新/舊股票背景色
+
+        新股票：白色背景（預設）
+        舊股票：淺灰背景
+
+        Args:
+            worksheet: gspread Worksheet 物件
+            sorted_data: 已排序的資料列表
+            prev_stock_ids: 前一交易日的股票代號集合
+            col_count: 欄位數量
+        """
+        if not sorted_data:
+            return
+
+        try:
+            if col_count > 26:
+                logger.warning(f"欄位數 {col_count} 超過 26，跳過背景色標記")
+                return
+            last_col = chr(ord('A') + col_count - 1)
+            old_bg = {
+                "backgroundColor": {
+                    "red": 0.85, "green": 0.85, "blue": 0.85, "alpha": 1
+                }
+            }
+            new_bg = {
+                "backgroundColor": {
+                    "red": 1, "green": 1, "blue": 1, "alpha": 1
+                }
+            }
+
+            batch_formats = []
+            for i, row in enumerate(sorted_data):
+                row_num = i + 2  # +1 for header, +1 for 1-based index
+                cell_range = f"A{row_num}:{last_col}{row_num}"
+                stock_id = row.get("stock_id", "")
+
+                if stock_id in prev_stock_ids:
+                    batch_formats.append((cell_range, old_bg))
+                else:
+                    batch_formats.append((cell_range, new_bg))
+
+            if batch_formats:
+                worksheet.batch_format(batch_formats)
+                old_count = sum(
+                    1 for r in sorted_data
+                    if r.get("stock_id", "") in prev_stock_ids
+                )
+                logger.info(
+                    f"美股新/舊背景色標記完成: "
+                    f"新 {len(sorted_data) - old_count} / 舊 {old_count}"
+                )
+
+        except Exception as e:
+            logger.warning(f"美股新/舊背景色標記失敗（不影響資料匯出）: {e}")
 
     # ==================== 驗證資料匯出 ====================
 

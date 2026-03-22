@@ -382,6 +382,20 @@ class DailyTask:
         # 輸出所有股票的計算數據供驗證
         return df.to_dict("records")
 
+    def _get_prev_stock_ids(self, target_date: date, filter_type: str) -> set:
+        """取得前一交易日的篩選結果股票代號集合"""
+        prev_date = TradingCalendar.get_previous_trading_day(target_date)
+        if not prev_date:
+            return set()
+        try:
+            df = self.db.get_filter_results(filter_type, prev_date)
+            if df.empty:
+                return set()
+            return set(df["stock_id"].tolist())
+        except Exception as e:
+            logger.warning(f"取得前一交易日 {filter_type} 結果失敗: {e}")
+            return set()
+
     def _export_to_sheet(
         self,
         target_date: date,
@@ -394,13 +408,21 @@ class DailyTask:
             logger.warning("Google Sheet 未連線，跳過匯出")
             return
 
+        # 取得前一交易日的篩選結果（用於新/舊標記）
+        prev_vcp_ids = self._get_prev_stock_ids(target_date, "vcp")
+        prev_sanxian_ids = self._get_prev_stock_ids(target_date, "sanxian")
+
         # 匯出 VCP
         if vcp_results:
-            self.exporter.export_vcp(vcp_results, target_date)
+            self.exporter.export_vcp(
+                vcp_results, target_date, prev_stock_ids=prev_vcp_ids
+            )
 
         # 匯出三線開花
         if sanxian_results:
-            self.exporter.export_sanxian(sanxian_results, target_date)
+            self.exporter.export_sanxian(
+                sanxian_results, target_date, prev_stock_ids=prev_sanxian_ids
+            )
 
         # 匯出驗證資料
         vcp_verification = getattr(self, "_vcp_verification_data", [])

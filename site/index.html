@@ -268,6 +268,15 @@
 
     .date-stock-row:hover { border-color: var(--accent); }
 
+    /* New/old stock markers */
+    .date-stock-row.is-new { background: rgba(34, 197, 94, 0.07); }
+    .date-stock-row.is-old { background: rgba(255,255,255, 0.02); border-left: 3px solid var(--text-dim); }
+    .appearance-item.is-new { background: rgba(34, 197, 94, 0.07); }
+    .appearance-item.is-old { background: rgba(255,255,255, 0.02); border-left: 3px solid var(--text-dim); }
+    .new-old-label { font-size: 11px; padding: 1px 6px; border-radius: 4px; font-weight: 600; }
+    .new-old-label.is-new { background: rgba(34, 197, 94, 0.15); color: var(--green); }
+    .new-old-label.is-old { background: rgba(139, 141, 151, 0.15); color: var(--text-dim); }
+
     .date-stock-row .stock-id { font-size: 15px; min-width: 70px; }
     .date-stock-row .stock-name { font-size: 14px; min-width: 100px; }
     .date-stock-row .industry-text { flex: 1; }
@@ -487,7 +496,7 @@
           }
         }
         const merged = Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date));
-        const appearanceHtml = merged.map(a => renderAppearanceRow(a)).join('');
+        const appearanceHtml = merged.map(a => renderAppearanceRow(a, stock.stock_id)).join('');
 
         return `<div class="stock-card" onclick="if(!event.target.closest('.tag'))this.classList.toggle('open')">
           <div class="stock-header">
@@ -584,6 +593,12 @@
 
       const merged = Object.values(stockMap);
 
+      // Determine new/old by comparing with previous date
+      const prevStockIds = getPrevDateStockIds(dateStr);
+      for (const s of merged) {
+        s.isNew = !prevStockIds.has(s.stock_id);
+      }
+
       // Sort: prioritize stocks with more tags, then by return_20d desc
       merged.sort((a, b) => {
         const aScore = (a.is_strong ? 1 : 0) + (a.is_new_high ? 1 : 0) + (a.is_sanxian ? 1 : 0);
@@ -598,10 +613,13 @@
       const sanxianCount = merged.filter(s => s.is_sanxian).length;
       const bothCount = merged.filter(s => (s.is_strong || s.is_new_high) && s.is_sanxian).length;
 
+      const newCount = merged.filter(s => s.isNew).length;
+      const oldCount = merged.length - newCount;
+
       let html = `<div class="section-header">
         <div class="section-title"><span>${dateStr}</span></div>
         <div class="section-count">
-          共 ${merged.length} 檔（VCP強勢 ${strongCount} / VCP新高 ${newHighCount} / 三線開花 ${sanxianCount}${bothCount > 0 ? ` / 同時上榜 ${bothCount}` : ''}）
+          共 ${merged.length} 檔（新 ${newCount} / 舊 ${oldCount} / VCP強勢 ${strongCount} / VCP新高 ${newHighCount} / 三線開花 ${sanxianCount}${bothCount > 0 ? ` / 同時上榜 ${bothCount}` : ''}）
         </div>
       </div>`;
 
@@ -612,6 +630,10 @@
 
     function renderDateStockRow(s) {
       const tags = buildTags(s);
+      const newOldCls = s.isNew ? 'is-new' : 'is-old';
+      const newOldLabel = s.isNew
+        ? '<span class="new-old-label is-new">新</span>'
+        : '<span class="new-old-label is-old">舊</span>';
       let details = '';
       if (s.return_20d != null) {
         const cls = s.return_20d >= 0 ? 'positive' : 'negative';
@@ -624,7 +646,8 @@
         details += `<span class="detail-value ${cls}">差距${sign}${s.gap_ratio.toFixed(2)}%</span>`;
       }
 
-      return `<div class="date-stock-row">
+      return `<div class="date-stock-row ${newOldCls}">
+        ${newOldLabel}
         <span class="market-badge ${s.market}">${s.market === 'tw' ? '台' : '美'}</span>
         <span class="stock-id">${escapeHtml(s.stock_id)}</span>
         <span class="stock-name">${escapeHtml(s.stock_name)}</span>
@@ -635,6 +658,17 @@
     }
 
     // ===== Shared helpers =====
+
+    // NOTE: 前端是跨 VCP + 三線開花合併比較（stock_id 在前一天任一類型出現即為「舊」），
+    //       Google Sheet 是同類型獨立比較。這是設計上的差異。
+    function getPrevDateStockIds(dateStr) {
+      // Find previous date in ALL_DATES (sorted desc)
+      const idx = ALL_DATES.indexOf(dateStr);
+      const prevDate = (idx >= 0 && idx < ALL_DATES.length - 1) ? ALL_DATES[idx + 1] : null;
+      if (!prevDate || !DATE_INDEX[prevDate]) return new Set();
+      return new Set(DATE_INDEX[prevDate].map(e => e.stock_id));
+    }
+
     function fmtVal(v) { return v != null ? v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-'; }
     function fmtPct(v) { return v != null ? (v * 100).toFixed(2) + '%' : '-'; }
 
@@ -690,8 +724,15 @@
       return tags;
     }
 
-    function renderAppearanceRow(a) {
+    function renderAppearanceRow(a, stockId) {
       const tags = buildTags(a);
+      const prevIds = getPrevDateStockIds(a.date);
+      // No previous date → all are "new"
+      const isNew = prevIds.size === 0 || !prevIds.has(stockId);
+      const newOldCls = isNew ? 'is-new' : 'is-old';
+      const newOldLabel = isNew
+        ? '<span class="new-old-label is-new">新</span>'
+        : '<span class="new-old-label is-old">舊</span>';
       let details = '';
 
       if (a.return_20d != null) {
@@ -705,8 +746,9 @@
         details += `<span class="detail-value ${cls}">差距${sign}${a.gap_ratio.toFixed(2)}%</span>`;
       }
 
-      return `<div class="appearance-item">
+      return `<div class="appearance-item ${newOldCls}">
         <span class="date-text">${a.date}</span>
+        ${newOldLabel}
         ${tags}
         ${details}
       </div>`;
