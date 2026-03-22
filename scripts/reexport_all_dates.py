@@ -31,6 +31,7 @@ from calculators.sanxian_filter import SanxianFilter
 from config.settings import SHEET_IDS
 from data.sqlite_database import SQLiteDatabase
 from exporters.google_sheet import GoogleSheetExporter
+from utils.trading_calendar import TradingCalendar
 
 
 # Google API 限流保護
@@ -185,6 +186,22 @@ def get_sheet_dates(exporter: GoogleSheetExporter) -> list[date]:
 
 # ==================== Step 3: 重新計算並匯出 ====================
 
+
+def _get_prev_stock_ids(db: SQLiteDatabase, target_date: date, filter_type: str) -> set:
+    """取得前一交易日的篩選結果股票代號集合"""
+    prev_date = TradingCalendar.get_previous_trading_day(target_date)
+    if not prev_date:
+        return set()
+    try:
+        df = db.get_filter_results(filter_type, prev_date)
+        if df.empty:
+            return set()
+        return set(df["stock_id"].tolist())
+    except Exception as e:
+        logger.warning(f"取得前一交易日 {filter_type} 結果失敗: {e}")
+        return set()
+
+
 def reexport_date(
     target_date: date,
     db: SQLiteDatabase,
@@ -224,13 +241,21 @@ def reexport_date(
     db.save_filter_results(vcp_results, "vcp", target_date)
     db.save_filter_results(sanxian_results, "sanxian", target_date)
 
+    # 取得前一交易日的篩選結果（用於新/舊標記）
+    prev_vcp_ids = _get_prev_stock_ids(db, target_date, "vcp")
+    prev_sanxian_ids = _get_prev_stock_ids(db, target_date, "sanxian")
+
     # 匯出到 Google Sheet（帶重試）
     for attempt in range(3):
         try:
             if vcp_results:
-                exporter.export_vcp(vcp_results, target_date)
+                exporter.export_vcp(
+                    vcp_results, target_date, prev_stock_ids=prev_vcp_ids
+                )
             if sanxian_results:
-                exporter.export_sanxian(sanxian_results, target_date)
+                exporter.export_sanxian(
+                    sanxian_results, target_date, prev_stock_ids=prev_sanxian_ids
+                )
             break
         except Exception as e:
             if "429" in str(e) and attempt < 2:
@@ -364,6 +389,10 @@ def main():
         "--skip-fetch", action="store_true",
         help="跳過 backfill，只重跑匯出"
     )
+    parser.add_argument(
+        "--last", type=int, default=0,
+        help="只重跑最近 N 個日期（0 = 全部）"
+    )
     args = parser.parse_args()
 
     db = SQLiteDatabase()
@@ -386,6 +415,11 @@ def main():
     if not dates:
         logger.error("Sheet 上無日期頁籤")
         return
+
+    # 如果指定 --last N，只取最近 N 個日期
+    if args.last > 0:
+        dates = dates[-args.last:]
+        logger.info(f"只重跑最近 {args.last} 個日期: {[d.isoformat() for d in dates]}")
 
     # Step 3: 逐日重跑
     logger.info(f"=== Step 3: 重新計算並匯出 {len(dates)} 個日期 ===")

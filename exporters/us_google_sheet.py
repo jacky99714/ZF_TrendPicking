@@ -550,10 +550,8 @@ class USGoogleSheetExporter:
                 cell_range = f"A{row_num}:{last_col}{row_num}"
                 stock_id = row.get("stock_id", "")
 
-                if stock_id in prev_stock_ids:
-                    batch_formats.append((cell_range, old_bg))
-                else:
-                    batch_formats.append((cell_range, new_bg))
+                bg = old_bg if stock_id in prev_stock_ids else new_bg
+                batch_formats.append({"range": cell_range, "format": bg})
 
             if batch_formats:
                 worksheet.batch_format(batch_formats)
