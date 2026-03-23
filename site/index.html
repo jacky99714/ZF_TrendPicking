@@ -293,6 +293,14 @@
     .date-stock-row .stock-name { font-size: 14px; min-width: 100px; }
     .date-stock-row .industry-text { flex: 1; }
 
+    .load-more-btn {
+      display: block; width: 100%; padding: 12px; margin-top: 12px;
+      background: var(--surface); border: 1px dashed var(--border);
+      border-radius: 10px; color: var(--accent); cursor: pointer;
+      font-size: 14px; transition: all 0.2s;
+    }
+    .load-more-btn:hover { border-color: var(--accent); background: rgba(99, 102, 241, 0.05); }
+
     footer { text-align: center; padding: 40px 0 20px; color: var(--text-dim); font-size: 12px; }
 
     .hidden { display: none !important; }
@@ -575,11 +583,13 @@
         }
         const merged = Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date));
         const appearanceHtml = merged.map(a => renderAppearanceRow(a, stock.stock_id)).join('');
-        const countLabel = stock.totalMonths > Object.keys(MONTH_CACHE).length
+        const loadedMonths = Object.keys(MONTH_CACHE).length;
+        const hasMore = stock.totalMonths > loadedMonths;
+        const countLabel = hasMore
           ? `近期 <strong>${merged.length}</strong> 天（共 ${stock.totalMonths} 月）`
           : `出現 <strong>${merged.length}</strong> 天`;
 
-        return `<div class="stock-card" onclick="if(!event.target.closest('.tag'))this.classList.toggle('open')">
+        return `<div class="stock-card" onclick="if(!event.target.closest('.tag') && !event.target.closest('.load-more-btn'))this.classList.toggle('open')">
           <div class="stock-header">
             <div class="stock-info">
               <span class="market-badge ${stock.market}">${stock.market === 'tw' ? '台股' : '美股'}</span>
@@ -592,7 +602,21 @@
           <div class="stock-details"><div class="appearance-list">${appearanceHtml}</div></div>
         </div>`;
       }).join('');
+      // "載入更多歷史" button
+      const loadedCount = Object.keys(MONTH_CACHE).length;
+      if (loadedCount < INDEX.months.length) {
+        html += `<button class="load-more-btn" onclick="loadMoreMonths()">載入更多歷史（已載入 ${loadedCount}/${INDEX.months.length} 月）</button>`;
+      }
       document.getElementById('content').innerHTML = `<div class="results">${html}</div>`;
+    }
+
+    async function loadMoreMonths() {
+      const btn = document.querySelector('.load-more-btn');
+      if (btn) btn.textContent = '載入中...';
+      const toLoad = INDEX.months.filter(m => !MONTH_CACHE[m]).slice(0, 3);
+      await Promise.all(toLoad.map(m => loadMonth(m)));
+      const q = document.getElementById('searchInput').value;
+      if (q.trim()) searchStock(q);
     }
 
     // === Date Search ===
