@@ -508,7 +508,7 @@
     }
 
     // === Stock Search ===
-    async function searchStock(query) {
+    function searchStock(query) {
       if (!INDEX || !query.trim()) { showEmptyState(); return; }
       const q = query.trim().toLowerCase();
       const matchedIds = [];
@@ -522,20 +522,7 @@
           `<div class="empty-state"><div class="icon">&#128533;</div><p>找不到「${escapeHtml(query)}」的相關結果</p></div>`;
         return;
       }
-      // Load all months needed for matched stocks
-      const neededMonths = new Set();
-      for (const sid of matchedIds) {
-        const s = INDEX.stocks[sid];
-        if (s.ms) s.ms.forEach(m => neededMonths.add(m));
-      }
-      // Load in parallel (max 3 concurrent)
-      const toLoad = [...neededMonths].filter(m => !MONTH_CACHE[m]);
-      if (toLoad.length > 0) {
-        document.getElementById('content').innerHTML =
-          '<div class="loading"><div class="spinner"></div><p>載入資料中...</p></div>';
-        await Promise.all(toLoad.map(m => loadMonth(m)));
-      }
-      // Build results from loaded data
+      // Only use already-loaded months (no extra fetching)
       const results = matchedIds.map(sid => {
         const s = INDEX.stocks[sid];
         const appearances = [];
@@ -549,8 +536,10 @@
             appearances.push(e);
           }
         }
-        return { stock_id: sid, stock_name: s.n, market: s.m, industry: s.i, appearances };
-      }).filter(s => s.appearances.length > 0);
+        // Total count from index (across all months, not just loaded ones)
+        const totalMonths = s.ms ? s.ms.length : 0;
+        return { stock_id: sid, stock_name: s.n, market: s.m, industry: s.i, appearances, totalMonths };
+      }).filter(s => s.appearances.length > 0 || s.totalMonths > 0);
 
       results.sort((a, b) => b.appearances.length - a.appearances.length);
       if (results.length === 0) {
@@ -563,26 +552,32 @@
 
     function renderStockResults(stocks) {
       const html = stocks.map(stock => {
+        // Group appearances by date (each appearance already has date info via DATE_INDEX lookup)
         const byDate = {};
-        for (const a of stock.appearances) {
-          const d = a.return_20d != null ? a.return_20d : null;
-          const date = ALL_DATES.find(dt => DATE_INDEX[dt]?.some(e => e.stock_id === stock.stock_id && e.type === a.type)) || '';
-          const dateKey = Object.keys(DATE_INDEX).find(dt => DATE_INDEX[dt].includes(a)) || '';
-          if (!byDate[dateKey]) {
-            byDate[dateKey] = { date: dateKey, is_strong: false, is_new_high: false, is_sanxian: false, return_20d: null, gap_ratio: null };
-          }
-          const bd = byDate[dateKey];
-          if (a.type === 'vcp') {
-            if (a.is_strong) bd.is_strong = true;
-            if (a.is_new_high) bd.is_new_high = true;
-            if (a.return_20d != null) bd.return_20d = a.return_20d;
-          } else {
-            bd.is_sanxian = true;
-            if (a.gap_ratio != null) bd.gap_ratio = a.gap_ratio;
+        for (const d of ALL_DATES) {
+          const entries = DATE_INDEX[d];
+          if (!entries) continue;
+          for (const e of entries) {
+            if (e.stock_id !== stock.stock_id) continue;
+            if (!byDate[d]) {
+              byDate[d] = { date: d, is_strong: false, is_new_high: false, is_sanxian: false, return_20d: null, gap_ratio: null };
+            }
+            const bd = byDate[d];
+            if (e.type === 'vcp') {
+              if (e.is_strong) bd.is_strong = true;
+              if (e.is_new_high) bd.is_new_high = true;
+              if (e.return_20d != null) bd.return_20d = e.return_20d;
+            } else {
+              bd.is_sanxian = true;
+              if (e.gap_ratio != null) bd.gap_ratio = e.gap_ratio;
+            }
           }
         }
         const merged = Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date));
         const appearanceHtml = merged.map(a => renderAppearanceRow(a, stock.stock_id)).join('');
+        const countLabel = stock.totalMonths > Object.keys(MONTH_CACHE).length
+          ? `近期 <strong>${merged.length}</strong> 天（共 ${stock.totalMonths} 月）`
+          : `出現 <strong>${merged.length}</strong> 天`;
 
         return `<div class="stock-card" onclick="if(!event.target.closest('.tag'))this.classList.toggle('open')">
           <div class="stock-header">
@@ -592,7 +587,7 @@
               <span class="stock-name">${escapeHtml(stock.stock_name)}</span>
               <span class="industry-text">${escapeHtml(stock.industry)}</span>
             </div>
-            <div class="appearance-count">出現 <strong>${merged.length}</strong> 天</div>
+            <div class="appearance-count">${countLabel}</div>
           </div>
           <div class="stock-details"><div class="appearance-list">${appearanceHtml}</div></div>
         </div>`;
