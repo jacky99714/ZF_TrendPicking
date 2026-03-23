@@ -559,7 +559,7 @@
     }
 
     function renderStockResults(stocks) {
-      const html = stocks.map(stock => {
+      let html = stocks.map(stock => {
         // Group appearances by date (each appearance already has date info via DATE_INDEX lookup)
         const byDate = {};
         for (const d of ALL_DATES) {
@@ -821,7 +821,11 @@
       });
     });
 
-    document.getElementById('searchInput').addEventListener('input', (e) => searchStock(e.target.value));
+    let searchTimer = null;
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => searchStock(e.target.value), 300);
+    });
     document.getElementById('dateInput').addEventListener('change', (e) => searchByDate(e.target.value));
     document.getElementById('datePrev').addEventListener('click', () => navigateDate('prev'));
     document.getElementById('dateNext').addEventListener('click', () => navigateDate('next'));
