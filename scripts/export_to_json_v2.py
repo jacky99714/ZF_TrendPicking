@@ -30,6 +30,7 @@ sys.path.insert(0, str(BASE_DIR))
 
 OUTPUT_DIR = BASE_DIR / "site" / "data"
 MONTHS_DIR = OUTPUT_DIR / "months"
+IND_DIR = OUTPUT_DIR / "indicators"
 
 
 def safe_round(value, digits=2):
@@ -42,6 +43,40 @@ def safe_round(value, digits=2):
         return round(f, digits)
     except (ValueError, TypeError):
         return None
+
+
+def query_indicators(db_path, table):
+    """從 DB 查詢 indicator_json"""
+    if not os.path.exists(db_path):
+        return {}
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+
+    # Check if indicator_json column exists
+    cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+    if "indicator_json" not in cols:
+        conn.close()
+        return {}
+
+    rows = conn.execute(f"""
+        SELECT filter_date, filter_type, stock_id, indicator_json
+        FROM {table}
+        WHERE indicator_json IS NOT NULL AND indicator_json != ''
+    """).fetchall()
+    conn.close()
+
+    # Group by month -> { "2026-03": { "2026-03-20": { "2330": { "v": {...}, "s": {...} } } } }
+    by_month = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
+    for row in rows:
+        month = row["filter_date"][:7]
+        ftype = "v" if row["filter_type"] == "vcp" else "s"
+        try:
+            by_month[month][row["filter_date"]][row["stock_id"]][ftype] = json.loads(row["indicator_json"])
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    return by_month
 
 
 def query_results(db_path, table, market, sector_col="industry_category"):
@@ -171,10 +206,46 @@ def main():
         dates_in_month = len(set(e["d"] for e in data))
         print(f"   {month}.json: {kb:.1f} KB ({len(data)} 筆, {dates_in_month} 天)")
 
+    # === 5. 寫入指標 JSON（per month） ===
+    IND_DIR.mkdir(parents=True, exist_ok=True)
+    tw_ind = query_indicators(tw_db, "filter_result")
+    us_ind = query_indicators(us_db, "us_filter_result")
+
+    total_ind_kb = 0
+    ind_count = 0
+    for month in sorted_months:
+        merged_ind = {}
+        # Deep merge tw + us indicators
+        for src in (tw_ind, us_ind):
+            if month not in src:
+                continue
+            for dt, stocks in src[month].items():
+                if dt not in merged_ind:
+                    merged_ind[dt] = {}
+                for sid, types in stocks.items():
+                    if sid not in merged_ind[dt]:
+                        merged_ind[dt][sid] = {}
+                    merged_ind[dt][sid].update(types)
+
+        if not merged_ind:
+            continue
+
+        ind_path = IND_DIR / f"{month}.json"
+        with open(ind_path, "w", encoding="utf-8") as f:
+            json.dump(merged_ind, f, ensure_ascii=False, separators=(",", ":"))
+
+        kb = ind_path.stat().st_size / 1024
+        total_ind_kb += kb
+        ind_count += 1
+
+    print(f"   指標檔案: {total_ind_kb:.1f} KB ({ind_count} 個月)")
+
     print(f"\n✅ 匯出完成:")
     print(f"   index.json: {index_kb:.1f} KB")
     print(f"   月份檔案: {total_month_kb:.1f} KB ({len(sorted_months)} 個月)")
-    print(f"   總計: {(index_kb + total_month_kb):.1f} KB (原始 {88*1024:.0f} KB → 省 {(1 - (index_kb + total_month_kb) / (88*1024)) * 100:.0f}%)")
+    print(f"   指標檔案: {total_ind_kb:.1f} KB ({ind_count} 個月)")
+    total = index_kb + total_month_kb + total_ind_kb
+    print(f"   總計: {total:.1f} KB")
 
 
 if __name__ == "__main__":

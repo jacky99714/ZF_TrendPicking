@@ -740,7 +740,10 @@
       const merged = Object.values(stockMap);
       // New/old
       const prevStockIds = getPrevDateStockIds(dateStr);
-      for (const s of merged) s.isNew = !prevStockIds.has(s.stock_id);
+      for (const s of merged) {
+        s.isNew = !prevStockIds.has(s.stock_id);
+        s._date = dateStr;
+      }
       sortStocks(merged);
 
       const strongCount = merged.filter(s => s.is_strong).length;
@@ -760,7 +763,7 @@
     }
 
     function renderDateStockRow(s) {
-      const tags = buildTags(s);
+      const tags = buildTags(s, s._date, s.stock_id);
       const newOldCls = s.isNew ? 'is-new' : 'is-old';
       const newOldLabel = s.isNew ? '<span class="new-old-label is-new">新</span>' : '<span class="new-old-label is-old">舊</span>';
       let details = '';
@@ -813,18 +816,63 @@
     }
 
     const isMobile = () => window.innerWidth <= 600;
+    let IND_CACHE = {}; // { "2026-03": { "2026-03-20": { "2330": { "v": {...} } } } }
 
-    function buildTags(item) {
+    async function loadIndicators(month) {
+      if (IND_CACHE[month]) return IND_CACHE[month];
+      try {
+        const data = await fetchJSON(`data/indicators/${month}.json`);
+        IND_CACHE[month] = data;
+        return data;
+      } catch { return null; }
+    }
+
+    function buildTags(item, dateStr, stockId) {
       let tags = '';
       const m = isMobile();
-      if (item.is_strong) tags += `<span class="tag strong">${m ? 'V強' : 'VCP強勢'}</span> `;
-      if (item.is_new_high) tags += `<span class="tag newhigh">${m ? 'V新高' : 'VCP新高'}</span> `;
-      if (item.is_sanxian) tags += `<span class="tag sanxian">${m ? '三花' : '三線開花'}</span> `;
+      const dataAttr = dateStr && stockId ? ` data-date="${dateStr}" data-sid="${stockId}"` : '';
+      if (item.is_strong) tags += `<span class="tag strong"${dataAttr} data-tt="vs">${m ? 'V強' : 'VCP強勢'}</span> `;
+      if (item.is_new_high) tags += `<span class="tag newhigh"${dataAttr} data-tt="vh">${m ? 'V新高' : 'VCP新高'}</span> `;
+      if (item.is_sanxian) tags += `<span class="tag sanxian"${dataAttr} data-tt="sx">${m ? '三花' : '三線開花'}</span> `;
       return tags;
     }
 
+    function fmtVal(v) { return v != null ? v.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) : '-'; }
+    function fmtPct(v) { return v != null ? (v * 100).toFixed(2) + '%' : '-'; }
+
+    function buildTooltipHtml(type, ind) {
+      if (!ind) return '<span class="tooltip"><span class="t-label">無指標資料</span></span>';
+      if (type === 'vs') {
+        return `<span class="tooltip">
+          <span class="t-label">收盤</span> <span class="t-val">${fmtVal(ind.close)}</span><br>
+          <span class="t-label">MA50</span> <span class="t-val">${fmtVal(ind.ma50)}</span> &gt;
+          <span class="t-label">MA150</span> <span class="t-val">${fmtVal(ind.ma150)}</span> &gt;
+          <span class="t-label">MA200</span> <span class="t-val">${fmtVal(ind.ma200)}</span><br>
+          <span class="t-label">MA200趨勢</span> <span class="t-val">${ind.ma200_slope != null ? (ind.ma200_slope > 0 ? '↑' : '↓') : '-'}</span> (${fmtVal(ind.ma200_slope)})<br>
+          <span class="t-label">20日漲幅</span> <span class="t-val">${fmtPct(ind.return_20d)}</span> &gt; 大盤 <span class="t-val">${fmtPct(ind.market_return)}</span>
+        </span>`;
+      } else if (type === 'vh') {
+        const gap = (ind.high_5d && ind.high_252d) ? Math.abs(ind.high_5d / ind.high_252d - 1) : null;
+        return `<span class="tooltip">
+          <span class="t-label">5日高點</span> <span class="t-val">${fmtVal(ind.high_5d)}</span><br>
+          <span class="t-label">52週高點</span> <span class="t-val">${fmtVal(ind.high_252d)}</span><br>
+          <span class="t-label">差距</span> <span class="t-val">${gap != null ? (gap*100).toFixed(2)+'%' : '-'}</span><br>
+          <span class="t-label">20日漲幅</span> <span class="t-val">${fmtPct(ind.return_20d)}</span> &gt; 大盤 <span class="t-val">${fmtPct(ind.market_return)}</span>
+        </span>`;
+      } else {
+        return `<span class="tooltip">
+          <span class="t-label">收盤</span> <span class="t-val">${fmtVal(ind.close)}</span><br>
+          <span class="t-label">MA8</span> <span class="t-val">${fmtVal(ind.ma8)}</span> &gt;
+          <span class="t-label">MA21</span> <span class="t-val">${fmtVal(ind.ma21)}</span> &gt;
+          <span class="t-label">MA55</span> <span class="t-val">${fmtVal(ind.ma55)}</span><br>
+          <span class="t-label">55日高點</span> <span class="t-val">${fmtVal(ind.high_55d)}</span>
+          <span class="t-label">次高價</span> <span class="t-val">${fmtVal(ind.second_high)}</span>
+        </span>`;
+      }
+    }
+
     function renderAppearanceRow(a, stockId) {
-      const tags = buildTags(a);
+      const tags = buildTags(a, a.date, stockId);
       const prevIds = getPrevDateStockIds(a.date);
       const isNew = prevIds.size === 0 || !prevIds.has(stockId);
       const newOldCls = isNew ? 'is-new' : 'is-old';
@@ -925,6 +973,60 @@
         currentSort = btn.dataset.sort;
         triggerCurrentSearch();
       });
+    });
+
+    // Tag click → load indicator on demand and show tooltip
+    document.addEventListener('click', async (e) => {
+      const tag = e.target.closest('.tag');
+      if (!tag) {
+        document.querySelectorAll('.tag.tooltip-open').forEach(t => {
+          t.classList.remove('tooltip-open');
+          const tt = t.querySelector('.tooltip');
+          if (tt) tt.remove();
+        });
+        return;
+      }
+
+      e.stopPropagation();
+
+      // Close other tooltips
+      document.querySelectorAll('.tag.tooltip-open').forEach(t => {
+        if (t !== tag) {
+          t.classList.remove('tooltip-open');
+          const tt = t.querySelector('.tooltip');
+          if (tt) tt.remove();
+        }
+      });
+
+      // Toggle off if already open
+      if (tag.classList.contains('tooltip-open')) {
+        tag.classList.remove('tooltip-open');
+        const tt = tag.querySelector('.tooltip');
+        if (tt) tt.remove();
+        return;
+      }
+
+      const dt = tag.dataset.date;
+      const sid = tag.dataset.sid;
+      const ttType = tag.dataset.tt; // vs, vh, sx
+      if (!dt || !sid) return;
+
+      // Show loading
+      tag.classList.add('tooltip-open');
+      tag.insertAdjacentHTML('beforeend', '<span class="tooltip"><span class="t-label">載入中...</span></span>');
+
+      const month = dt.substring(0, 7);
+      const indData = await loadIndicators(month);
+
+      // Remove loading tooltip
+      const oldTt = tag.querySelector('.tooltip');
+      if (oldTt) oldTt.remove();
+
+      // Find indicator
+      const indKey = (ttType === 'sx') ? 's' : 'v';
+      const ind = indData?.[dt]?.[sid]?.[indKey] || null;
+
+      tag.insertAdjacentHTML('beforeend', buildTooltipHtml(ttType, ind));
     });
 
     loadIndex();
