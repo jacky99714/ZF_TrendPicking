@@ -306,14 +306,65 @@
     .hidden { display: none !important; }
 
     @media (max-width: 600px) {
-      .container { padding: 16px 12px; }
-      header h1 { font-size: 22px; }
-      .stock-header { padding: 12px 14px; }
-      .appearance-list { padding: 0 14px 12px; }
-      .stats { gap: 8px; }
-      .stat-card { padding: 10px 14px; min-width: 80px; }
-      .date-stock-row { flex-wrap: wrap; gap: 6px; padding: 10px 12px; }
-      .date-stock-row .industry-text { flex: none; }
+      .container { padding: 12px 8px; }
+      header h1 { font-size: 20px; }
+      header p { font-size: 12px; }
+
+      /* Stats: horizontal scroll or smaller */
+      .stats { gap: 6px; }
+      .stat-card { padding: 8px 10px; min-width: 0; flex: 1; }
+      .stat-card .label { font-size: 10px; }
+      .stat-card .value { font-size: 16px; }
+
+      /* Filters & sort: smaller */
+      .filters { gap: 5px; margin-bottom: 12px; }
+      .filter-btn { padding: 5px 10px; font-size: 12px; }
+      .sort-row { gap: 5px; margin-bottom: 12px; }
+      .sort-btn { padding: 4px 8px; font-size: 11px; }
+      .sort-label { font-size: 12px; }
+
+      /* Stock card header: stack vertically */
+      .stock-header { padding: 10px 12px; flex-direction: column; align-items: flex-start; gap: 6px; }
+      .stock-info { gap: 6px; }
+      .stock-id { font-size: 16px; }
+      .stock-name { font-size: 13px; }
+      .appearance-count { font-size: 12px; }
+      .appearance-count strong { font-size: 14px; }
+      .appearance-list { padding: 0 8px 10px; }
+
+      /* Appearance row: wrap into 2 rows */
+      .appearance-item {
+        flex-wrap: wrap; gap: 4px 8px; padding: 8px 10px; font-size: 13px;
+      }
+      .appearance-item .date-text { min-width: auto; font-size: 13px; }
+      .appearance-item .detail-value { margin-left: 0; font-size: 12px; }
+      .appearance-item .detail-label { font-size: 10px; }
+
+      /* Date stock row: 2-row layout */
+      .date-stock-row {
+        flex-wrap: wrap; gap: 4px 8px; padding: 8px 10px; font-size: 13px;
+      }
+      .date-stock-row .stock-id { font-size: 14px; min-width: auto; }
+      .date-stock-row .stock-name { font-size: 13px; min-width: auto; }
+      .date-stock-row .industry-text { flex: none; font-size: 11px; }
+      .date-stock-row .detail-value { margin-left: 0; font-size: 12px; }
+      .date-stock-row .detail-label { font-size: 10px; }
+
+      /* Tags: prevent vertical text wrap */
+      .tag { white-space: nowrap; font-size: 10px; padding: 2px 6px; }
+
+      /* Section header */
+      .section-header { flex-direction: column; gap: 4px; align-items: flex-start; }
+      .section-count { font-size: 11px; }
+
+      /* Date picker */
+      .date-picker-row { gap: 6px; }
+      .date-nav-btn { padding: 8px 10px; font-size: 14px; min-width: 36px; }
+      .date-quick-btns { gap: 4px; }
+      .date-quick-btn { font-size: 11px; padding: 3px 7px; }
+
+      /* New/old label */
+      .new-old-label { font-size: 10px; padding: 1px 4px; }
     }
   </style>
 </head>
