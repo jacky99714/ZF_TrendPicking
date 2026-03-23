@@ -386,66 +386,109 @@
   </div>
 
   <script>
-    let DATA = null;
-    let DATE_INDEX = null; // { date -> [ {stock info + appearance} ] }
-    let ALL_DATES = [];    // sorted desc
+    // === State ===
+    let INDEX = null;          // index.json: stocks master + months list
+    let MONTH_CACHE = {};      // loaded month data: { "2026-03": [...] }
+    let DATE_INDEX = {};       // { date -> [ entries ] } built from loaded months
+    let ALL_DATES = [];        // sorted desc, from all loaded months
     let currentMode = 'stock';
     let activeFilters = { market: 'all', type: 'all' };
     let currentSort = 'default';
+    let loadingMonths = new Set();
 
-    async function loadData() {
+    // === Data Loading ===
+    async function fetchJSON(url) {
+      const resp = await fetch(url + '?v=' + Date.now(), { cache: 'no-store' });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      return resp.json();
+    }
+
+    async function loadIndex() {
       try {
-        const resp = await fetch('data/filter_results.json?v=' + Date.now(), { cache: 'no-store' });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const text = await resp.text();
-        const sanitized = text.replace(/:\s*(-?Infinity|NaN)\b/g, ': null');
-        DATA = JSON.parse(sanitized);
+        INDEX = await fetchJSON('data/index.json');
+        document.getElementById('statDate').textContent = INDEX.generated_at;
+        document.getElementById('statStocks').textContent = INDEX.total_stocks.toLocaleString();
+        document.getElementById('statRecords').textContent = INDEX.total_records.toLocaleString();
 
-        document.getElementById('statDate').textContent = DATA.generated_at;
-        document.getElementById('statStocks').textContent = DATA.total_stocks.toLocaleString();
-        document.getElementById('statRecords').textContent = DATA.total_records.toLocaleString();
-
-        // Build date index
-        buildDateIndex();
-
+        // Collect ALL dates from all months (we'll load data lazily)
+        ALL_DATES = [];
+        // Pre-load latest month for quick date buttons
+        if (INDEX.months.length > 0) {
+          await loadMonth(INDEX.months[0]);
+          // Also preload previous month for new/old comparison
+          if (INDEX.months.length > 1) loadMonth(INDEX.months[1]);
+        }
+        updateDateUI();
         showEmptyState();
       } catch (err) {
         document.getElementById('content').innerHTML =
-          `<div class="empty-state"><div class="icon">&#9888;</div><p>載入資料失敗: ${err.message}</p></div>`;
+          `<div class="empty-state"><div class="icon">&#9888;</div><p>載入失敗: ${err.message}</p></div>`;
       }
     }
 
-    function buildDateIndex() {
-      DATE_INDEX = {};
-      for (const [sid, stock] of Object.entries(DATA.stocks)) {
-        for (const a of stock.appearances) {
-          if (!DATE_INDEX[a.date]) DATE_INDEX[a.date] = [];
-          DATE_INDEX[a.date].push({
-            stock_id: sid,
-            stock_name: stock.stock_name,
-            market: stock.market,
-            industry: stock.industry,
-            ...a
+    async function loadMonth(month) {
+      if (MONTH_CACHE[month]) return MONTH_CACHE[month];
+      if (loadingMonths.has(month)) {
+        // Wait for ongoing load
+        while (loadingMonths.has(month)) await new Promise(r => setTimeout(r, 50));
+        return MONTH_CACHE[month];
+      }
+      loadingMonths.add(month);
+      try {
+        const data = await fetchJSON(`data/months/${month}.json`);
+        MONTH_CACHE[month] = data;
+        // Merge into DATE_INDEX
+        for (const e of data) {
+          const sid = e.id;
+          const stock = INDEX.stocks[sid];
+          if (!stock) continue;
+          if (!DATE_INDEX[e.d]) DATE_INDEX[e.d] = [];
+          DATE_INDEX[e.d].push({
+            stock_id: sid, stock_name: stock.n, market: stock.m, industry: stock.i,
+            type: e.t === 'sx' ? 'sanxian' : 'vcp',
+            is_strong: !!e.s, is_new_high: !!e.h,
+            return_20d: e.r ?? null, gap_ratio: e.g ?? null,
           });
         }
+        // Rebuild ALL_DATES
+        ALL_DATES = Object.keys(DATE_INDEX).sort().reverse();
+        updateDateUI();
+        return data;
+      } finally {
+        loadingMonths.delete(month);
       }
-      ALL_DATES = Object.keys(DATE_INDEX).sort().reverse();
+    }
 
-      // Set date input default and range
-      if (ALL_DATES.length > 0) {
-        const dateInput = document.getElementById('dateInput');
-        dateInput.value = ALL_DATES[0];
-        dateInput.min = ALL_DATES[ALL_DATES.length - 1];
-        dateInput.max = ALL_DATES[0];
+    async function ensureDateLoaded(dateStr) {
+      const month = dateStr.substring(0, 7);
+      if (!MONTH_CACHE[month] && INDEX.months.includes(month)) {
+        await loadMonth(month);
       }
+      // Also ensure previous month for new/old comparison
+      const prevMonth = getPrevMonth(month);
+      if (prevMonth && !MONTH_CACHE[prevMonth] && INDEX.months.includes(prevMonth)) {
+        await loadMonth(prevMonth);
+      }
+    }
 
-      // Build quick date buttons (last 10 dates)
+    function getPrevMonth(m) {
+      const [y, mo] = m.split('-').map(Number);
+      const d = new Date(y, mo - 2, 1);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }
+
+    function updateDateUI() {
+      if (ALL_DATES.length === 0) return;
+      const dateInput = document.getElementById('dateInput');
+      if (!dateInput.value) dateInput.value = ALL_DATES[0];
+      dateInput.min = ALL_DATES[ALL_DATES.length - 1];
+      dateInput.max = ALL_DATES[0];
+      // Quick date buttons (last 10)
       const quickContainer = document.getElementById('dateQuickBtns');
-      const recentDates = ALL_DATES.slice(0, 10);
-      quickContainer.innerHTML = recentDates.map(d =>
+      const recent = ALL_DATES.slice(0, 10);
+      quickContainer.innerHTML = recent.map(d =>
         `<button class="date-quick-btn" data-date="${d}">${d}</button>`
       ).join('');
-
       quickContainer.querySelectorAll('.date-quick-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           document.getElementById('dateInput').value = btn.dataset.date;
@@ -464,57 +507,78 @@
       }
     }
 
-    // ===== Stock search =====
-    function searchStock(query) {
-      if (!DATA || !query.trim()) { showEmptyState(); return; }
-
+    // === Stock Search ===
+    async function searchStock(query) {
+      if (!INDEX || !query.trim()) { showEmptyState(); return; }
       const q = query.trim().toLowerCase();
-      const matches = [];
-
-      for (const [sid, stock] of Object.entries(DATA.stocks)) {
-        if (sid.toLowerCase().includes(q) || stock.stock_name.toLowerCase().includes(q)) {
-          matches.push(stock);
+      const matchedIds = [];
+      for (const [sid, s] of Object.entries(INDEX.stocks)) {
+        if (sid.toLowerCase().includes(q) || s.n.toLowerCase().includes(q)) {
+          matchedIds.push(sid);
         }
       }
-
-      const filtered = matches.map(stock => {
-        const fa = stock.appearances.filter(a => {
-          if (activeFilters.market !== 'all' && stock.market !== activeFilters.market) return false;
-          if (activeFilters.type !== 'all' && a.type !== activeFilters.type) return false;
-          return true;
-        });
-        return { ...stock, appearances: fa };
-      }).filter(s => s.appearances.length > 0);
-
-      filtered.sort((a, b) => b.appearances.length - a.appearances.length);
-
-      if (filtered.length === 0) {
+      if (matchedIds.length === 0) {
         document.getElementById('content').innerHTML =
           `<div class="empty-state"><div class="icon">&#128533;</div><p>找不到「${escapeHtml(query)}」的相關結果</p></div>`;
         return;
       }
+      // Load all months needed for matched stocks
+      const neededMonths = new Set();
+      for (const sid of matchedIds) {
+        const s = INDEX.stocks[sid];
+        if (s.ms) s.ms.forEach(m => neededMonths.add(m));
+      }
+      // Load in parallel (max 3 concurrent)
+      const toLoad = [...neededMonths].filter(m => !MONTH_CACHE[m]);
+      if (toLoad.length > 0) {
+        document.getElementById('content').innerHTML =
+          '<div class="loading"><div class="spinner"></div><p>載入資料中...</p></div>';
+        await Promise.all(toLoad.map(m => loadMonth(m)));
+      }
+      // Build results from loaded data
+      const results = matchedIds.map(sid => {
+        const s = INDEX.stocks[sid];
+        const appearances = [];
+        for (const d of ALL_DATES) {
+          const entries = DATE_INDEX[d];
+          if (!entries) continue;
+          for (const e of entries) {
+            if (e.stock_id !== sid) continue;
+            if (activeFilters.market !== 'all' && e.market !== activeFilters.market) continue;
+            if (activeFilters.type !== 'all' && e.type !== activeFilters.type) continue;
+            appearances.push(e);
+          }
+        }
+        return { stock_id: sid, stock_name: s.n, market: s.m, industry: s.i, appearances };
+      }).filter(s => s.appearances.length > 0);
 
-      renderStockResults(filtered);
+      results.sort((a, b) => b.appearances.length - a.appearances.length);
+      if (results.length === 0) {
+        document.getElementById('content').innerHTML =
+          `<div class="empty-state"><div class="icon">&#128533;</div><p>找不到「${escapeHtml(query)}」的相關結果</p></div>`;
+        return;
+      }
+      renderStockResults(results);
     }
 
     function renderStockResults(stocks) {
       const html = stocks.map(stock => {
-        // Merge appearances by date
         const byDate = {};
         for (const a of stock.appearances) {
-          if (!byDate[a.date]) {
-            byDate[a.date] = { date: a.date, is_strong: false, is_new_high: false, is_sanxian: false, return_20d: null, gap_ratio: null, vcp_ind: null, sanxian_ind: null };
+          const d = a.return_20d != null ? a.return_20d : null;
+          const date = ALL_DATES.find(dt => DATE_INDEX[dt]?.some(e => e.stock_id === stock.stock_id && e.type === a.type)) || '';
+          const dateKey = Object.keys(DATE_INDEX).find(dt => DATE_INDEX[dt].includes(a)) || '';
+          if (!byDate[dateKey]) {
+            byDate[dateKey] = { date: dateKey, is_strong: false, is_new_high: false, is_sanxian: false, return_20d: null, gap_ratio: null };
           }
-          const d = byDate[a.date];
+          const bd = byDate[dateKey];
           if (a.type === 'vcp') {
-            if (a.is_strong) d.is_strong = true;
-            if (a.is_new_high) d.is_new_high = true;
-            if (a.return_20d != null) d.return_20d = a.return_20d;
-            if (a.ind) d.vcp_ind = a.ind;
+            if (a.is_strong) bd.is_strong = true;
+            if (a.is_new_high) bd.is_new_high = true;
+            if (a.return_20d != null) bd.return_20d = a.return_20d;
           } else {
-            d.is_sanxian = true;
-            if (a.gap_ratio != null) d.gap_ratio = a.gap_ratio;
-            if (a.ind) d.sanxian_ind = a.ind;
+            bd.is_sanxian = true;
+            if (a.gap_ratio != null) bd.gap_ratio = a.gap_ratio;
           }
         }
         const merged = Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date));
@@ -528,76 +592,58 @@
               <span class="stock-name">${escapeHtml(stock.stock_name)}</span>
               <span class="industry-text">${escapeHtml(stock.industry)}</span>
             </div>
-            <div class="appearance-count">
-              出現 <strong>${merged.length}</strong> 天
-            </div>
+            <div class="appearance-count">出現 <strong>${merged.length}</strong> 天</div>
           </div>
-          <div class="stock-details">
-            <div class="appearance-list">${appearanceHtml}</div>
-          </div>
+          <div class="stock-details"><div class="appearance-list">${appearanceHtml}</div></div>
         </div>`;
       }).join('');
-
       document.getElementById('content').innerHTML = `<div class="results">${html}</div>`;
     }
 
-    // ===== Date search =====
-    function searchByDate(dateStr) {
-      if (!DATE_INDEX) return;
+    // === Date Search ===
+    async function searchByDate(dateStr) {
+      if (!INDEX) return;
+      document.getElementById('content').innerHTML =
+        '<div class="loading"><div class="spinner"></div><p>載入資料中...</p></div>';
+      await ensureDateLoaded(dateStr);
 
-      // Find nearest date with data
       let entries = DATE_INDEX[dateStr];
       if (!entries) {
-        // Find closest date
         const closest = ALL_DATES.reduce((prev, curr) =>
           Math.abs(new Date(curr) - new Date(dateStr)) < Math.abs(new Date(prev) - new Date(dateStr)) ? curr : prev
-        );
+        , ALL_DATES[0]);
         if (closest) {
           dateStr = closest;
           document.getElementById('dateInput').value = closest;
+          await ensureDateLoaded(closest);
           entries = DATE_INDEX[closest];
         }
       }
-
       if (!entries || entries.length === 0) {
         document.getElementById('content').innerHTML =
           `<div class="empty-state"><div class="icon">&#128533;</div><p>${dateStr} 沒有篩選資料</p></div>`;
         return;
       }
-
-      // Apply filters
       const filtered = entries.filter(e => {
         if (activeFilters.market !== 'all' && e.market !== activeFilters.market) return false;
         if (activeFilters.type !== 'all' && e.type !== activeFilters.type) return false;
         return true;
       });
-
       if (filtered.length === 0) {
         document.getElementById('content').innerHTML =
           `<div class="empty-state"><div class="icon">&#128533;</div><p>${dateStr} 在目前篩選條件下沒有結果</p></div>`;
         return;
       }
-
       renderDateResults(dateStr, filtered);
     }
 
     function renderDateResults(dateStr, entries) {
-      // Merge by stock_id: combine VCP + sanxian into one row per stock
       const stockMap = {};
       for (const e of entries) {
         if (!stockMap[e.stock_id]) {
           stockMap[e.stock_id] = {
-            stock_id: e.stock_id,
-            stock_name: e.stock_name,
-            market: e.market,
-            industry: e.industry,
-            is_strong: false,
-            is_new_high: false,
-            is_sanxian: false,
-            return_20d: null,
-            gap_ratio: null,
-            vcp_ind: null,
-            sanxian_ind: null,
+            stock_id: e.stock_id, stock_name: e.stock_name, market: e.market, industry: e.industry,
+            is_strong: false, is_new_high: false, is_sanxian: false, return_20d: null, gap_ratio: null,
           };
         }
         const s = stockMap[e.stock_id];
@@ -605,52 +651,37 @@
           if (e.is_strong) s.is_strong = true;
           if (e.is_new_high) s.is_new_high = true;
           if (e.return_20d != null) s.return_20d = e.return_20d;
-          if (e.ind) s.vcp_ind = e.ind;
         } else {
           s.is_sanxian = true;
           if (e.gap_ratio != null) s.gap_ratio = e.gap_ratio;
-          if (e.ind) s.sanxian_ind = e.ind;
         }
       }
-
       const merged = Object.values(stockMap);
-
-      // Determine new/old by comparing with previous date
+      // New/old
       const prevStockIds = getPrevDateStockIds(dateStr);
-      for (const s of merged) {
-        s.isNew = !prevStockIds.has(s.stock_id);
-      }
-
-      // Sort by selected mode
+      for (const s of merged) s.isNew = !prevStockIds.has(s.stock_id);
       sortStocks(merged);
 
-      // Stats
       const strongCount = merged.filter(s => s.is_strong).length;
       const newHighCount = merged.filter(s => s.is_new_high).length;
       const sanxianCount = merged.filter(s => s.is_sanxian).length;
       const bothCount = merged.filter(s => (s.is_strong || s.is_new_high) && s.is_sanxian).length;
-
       const newCount = merged.filter(s => s.isNew).length;
-      const oldCount = merged.length - newCount;
 
       let html = `<div class="section-header">
         <div class="section-title"><span>${dateStr}</span></div>
         <div class="section-count">
-          共 ${merged.length} 檔（新 ${newCount} / 舊 ${oldCount} / VCP強勢 ${strongCount} / VCP新高 ${newHighCount} / 三線開花 ${sanxianCount}${bothCount > 0 ? ` / 同時上榜 ${bothCount}` : ''}）
+          共 ${merged.length} 檔（新 ${newCount} / 舊 ${merged.length - newCount} / VCP強勢 ${strongCount} / VCP新高 ${newHighCount} / 三線開花 ${sanxianCount}${bothCount > 0 ? ` / 同時上榜 ${bothCount}` : ''}）
         </div>
       </div>`;
-
       html += merged.map(s => renderDateStockRow(s)).join('');
-
       document.getElementById('content').innerHTML = `<div class="results">${html}</div>`;
     }
 
     function renderDateStockRow(s) {
       const tags = buildTags(s);
       const newOldCls = s.isNew ? 'is-new' : 'is-old';
-      const newOldLabel = s.isNew
-        ? '<span class="new-old-label is-new">新</span>'
-        : '<span class="new-old-label is-old">舊</span>';
+      const newOldLabel = s.isNew ? '<span class="new-old-label is-new">新</span>' : '<span class="new-old-label is-old">舊</span>';
       let details = '';
       if (s.return_20d != null) {
         const cls = s.return_20d >= 0 ? 'positive' : 'negative';
@@ -662,7 +693,6 @@
         const sign = s.gap_ratio >= 0 ? '+' : '';
         details += `<span class="detail-value ${cls}"><span class="detail-label">突破差距</span>${sign}${s.gap_ratio.toFixed(2)}%</span>`;
       }
-
       return `<div class="date-stock-row ${newOldCls}">
         ${newOldLabel}
         <span class="market-badge ${s.market}">${s.market === 'tw' ? '台' : '美'}</span>
@@ -674,12 +704,8 @@
       </div>`;
     }
 
-    // ===== Shared helpers =====
-
-    // NOTE: 前端是跨 VCP + 三線開花合併比較（stock_id 在前一天任一類型出現即為「舊」），
-    //       Google Sheet 是同類型獨立比較。這是設計上的差異。
+    // === Helpers ===
     function getPrevDateStockIds(dateStr) {
-      // Find previous date in ALL_DATES (sorted desc)
       const idx = ALL_DATES.indexOf(dateStr);
       const prevDate = (idx >= 0 && idx < ALL_DATES.length - 1) ? ALL_DATES[idx + 1] : null;
       if (!prevDate || !DATE_INDEX[prevDate]) return new Set();
@@ -690,93 +716,36 @@
       const safeNum = v => (v != null && isFinite(v)) ? v : -Infinity;
       switch (currentSort) {
         case 'new-first':
-          arr.sort((a, b) => {
-            if (a.isNew !== b.isNew) return a.isNew ? -1 : 1;
-            return safeNum(b.return_20d) - safeNum(a.return_20d);
-          });
-          break;
+          arr.sort((a, b) => { if (a.isNew !== b.isNew) return a.isNew ? -1 : 1; return safeNum(b.return_20d) - safeNum(a.return_20d); }); break;
         case 'return':
-          arr.sort((a, b) => safeNum(b.return_20d) - safeNum(a.return_20d));
-          break;
+          arr.sort((a, b) => safeNum(b.return_20d) - safeNum(a.return_20d)); break;
         case 'gap':
-          arr.sort((a, b) => safeNum(b.gap_ratio) - safeNum(a.gap_ratio));
-          break;
-        default: // 'default' — 綜合：標籤數 > 漲幅
+          arr.sort((a, b) => safeNum(b.gap_ratio) - safeNum(a.gap_ratio)); break;
+        default:
           arr.sort((a, b) => {
-            const aScore = (a.is_strong ? 1 : 0) + (a.is_new_high ? 1 : 0) + (a.is_sanxian ? 1 : 0);
-            const bScore = (b.is_strong ? 1 : 0) + (b.is_new_high ? 1 : 0) + (b.is_sanxian ? 1 : 0);
-            if (bScore !== aScore) return bScore - aScore;
+            const aS = (a.is_strong?1:0)+(a.is_new_high?1:0)+(a.is_sanxian?1:0);
+            const bS = (b.is_strong?1:0)+(b.is_new_high?1:0)+(b.is_sanxian?1:0);
+            if (bS !== aS) return bS - aS;
             return safeNum(b.return_20d) - safeNum(a.return_20d);
           });
       }
-    }
-
-    function fmtVal(v) { return v != null ? v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-'; }
-    function fmtPct(v) { return v != null ? (v * 100).toFixed(2) + '%' : '-'; }
-
-    function buildVcpStrongTooltip(ind) {
-      if (!ind) return '';
-      return `<span class="tooltip">
-        <span class="t-label">收盤</span> <span class="t-val">${fmtVal(ind.close)}</span><br>
-        <span class="t-label">條件: 收盤 &gt; MA50 &gt; MA150 &gt; MA200</span><br>
-        <span class="t-label">MA50</span> <span class="t-val">${fmtVal(ind.ma50)}</span> &gt;
-        <span class="t-label">MA150</span> <span class="t-val">${fmtVal(ind.ma150)}</span> &gt;
-        <span class="t-label">MA200</span> <span class="t-val">${fmtVal(ind.ma200)}</span><br>
-        <span class="t-label">MA200趨勢</span> <span class="t-val">${ind.ma200_slope != null ? (ind.ma200_slope > 0 ? '↑ 上升' : '↓ 下降') : '-'}</span> (${fmtVal(ind.ma200_slope)})<br>
-        <span class="t-label">20日漲幅</span> <span class="t-val">${fmtPct(ind.return_20d)}</span> &gt; 大盤 <span class="t-val">${fmtPct(ind.market_return)}</span>
-      </span>`;
-    }
-
-    function buildVcpNewHighTooltip(ind) {
-      if (!ind) return '';
-      const gap = (ind.high_5d && ind.high_252d) ? Math.abs(ind.high_5d / ind.high_252d - 1) : null;
-      return `<span class="tooltip">
-        <span class="t-label">條件: 5日高點 ≈ 52週高點 (≤10%)</span><br>
-        <span class="t-label">5日高點</span> <span class="t-val">${fmtVal(ind.high_5d)}</span><br>
-        <span class="t-label">52週高點</span> <span class="t-val">${fmtVal(ind.high_252d)}</span><br>
-        <span class="t-label">差距</span> <span class="t-val">${gap != null ? (gap * 100).toFixed(2) + '%' : '-'}</span><br>
-        <span class="t-label">20日漲幅</span> <span class="t-val">${fmtPct(ind.return_20d)}</span> &gt; 大盤 <span class="t-val">${fmtPct(ind.market_return)}</span>
-      </span>`;
-    }
-
-    function buildSanxianTooltip(ind) {
-      if (!ind) return '';
-      return `<span class="tooltip">
-        <span class="t-label">收盤</span> <span class="t-val">${fmtVal(ind.close)}</span><br>
-        <span class="t-label">條件: 收盤 &gt; MA8 &gt; MA21 &gt; MA55</span><br>
-        <span class="t-label">MA8</span> <span class="t-val">${fmtVal(ind.ma8)}</span> &gt;
-        <span class="t-label">MA21</span> <span class="t-val">${fmtVal(ind.ma21)}</span> &gt;
-        <span class="t-label">MA55</span> <span class="t-val">${fmtVal(ind.ma55)}</span><br>
-        <span class="t-label">55日高點</span> <span class="t-val">${fmtVal(ind.high_55d)}</span>
-        <span class="t-label">次高價</span> <span class="t-val">${fmtVal(ind.second_high)}</span>
-      </span>`;
     }
 
     function buildTags(item) {
       let tags = '';
-      if (item.is_strong) {
-        tags += `<span class="tag strong">VCP強勢${buildVcpStrongTooltip(item.vcp_ind)}</span> `;
-      }
-      if (item.is_new_high) {
-        tags += `<span class="tag newhigh">VCP新高${buildVcpNewHighTooltip(item.vcp_ind)}</span> `;
-      }
-      if (item.is_sanxian) {
-        tags += `<span class="tag sanxian">三線開花${buildSanxianTooltip(item.sanxian_ind)}</span> `;
-      }
+      if (item.is_strong) tags += '<span class="tag strong">VCP強勢</span> ';
+      if (item.is_new_high) tags += '<span class="tag newhigh">VCP新高</span> ';
+      if (item.is_sanxian) tags += '<span class="tag sanxian">三線開花</span> ';
       return tags;
     }
 
     function renderAppearanceRow(a, stockId) {
       const tags = buildTags(a);
       const prevIds = getPrevDateStockIds(a.date);
-      // No previous date → all are "new"
       const isNew = prevIds.size === 0 || !prevIds.has(stockId);
       const newOldCls = isNew ? 'is-new' : 'is-old';
-      const newOldLabel = isNew
-        ? '<span class="new-old-label is-new">新</span>'
-        : '<span class="new-old-label is-old">舊</span>';
+      const newOldLabel = isNew ? '<span class="new-old-label is-new">新</span>' : '<span class="new-old-label is-old">舊</span>';
       let details = '';
-
       if (a.return_20d != null) {
         const cls = a.return_20d >= 0 ? 'positive' : 'negative';
         const sign = a.return_20d >= 0 ? '+' : '';
@@ -787,20 +756,13 @@
         const sign = a.gap_ratio >= 0 ? '+' : '';
         details += `<span class="detail-value ${cls}"><span class="detail-label">突破差距</span>${sign}${a.gap_ratio.toFixed(2)}%</span>`;
       }
-
       return `<div class="appearance-item ${newOldCls}">
         <span class="date-text">${a.date}</span>
-        ${newOldLabel}
-        ${tags}
-        ${details}
+        ${newOldLabel} ${tags} ${details}
       </div>`;
     }
 
-    function escapeHtml(str) {
-      const div = document.createElement('div');
-      div.textContent = str;
-      return div.innerHTML;
-    }
+    function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
 
     function triggerCurrentSearch() {
       if (currentMode === 'stock') {
@@ -813,39 +775,26 @@
     }
 
     function navigateDate(direction) {
-      const currentDate = document.getElementById('dateInput').value;
-      if (!currentDate || ALL_DATES.length === 0) return;
-
-      const idx = ALL_DATES.indexOf(currentDate);
-
-      if (direction === 'prev') {
-        // ALL_DATES is desc, so prev = next index
-        const newIdx = idx === -1 ? 0 : Math.min(idx + 1, ALL_DATES.length - 1);
-        document.getElementById('dateInput').value = ALL_DATES[newIdx];
-      } else {
-        const newIdx = idx === -1 ? 0 : Math.max(idx - 1, 0);
-        document.getElementById('dateInput').value = ALL_DATES[newIdx];
-      }
-
-      searchByDate(document.getElementById('dateInput').value);
+      const cur = document.getElementById('dateInput').value;
+      if (!cur || ALL_DATES.length === 0) return;
+      const idx = ALL_DATES.indexOf(cur);
+      const newIdx = direction === 'prev'
+        ? (idx === -1 ? 0 : Math.min(idx + 1, ALL_DATES.length - 1))
+        : (idx === -1 ? 0 : Math.max(idx - 1, 0));
+      document.getElementById('dateInput').value = ALL_DATES[newIdx];
+      searchByDate(ALL_DATES[newIdx]);
     }
 
-    // ===== Event listeners =====
-
-    // Mode tabs
+    // === Event Listeners ===
     document.querySelectorAll('.mode-tab').forEach(tab => {
       tab.addEventListener('click', () => {
         document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         currentMode = tab.dataset.mode;
-
         document.getElementById('stockMode').classList.toggle('hidden', currentMode !== 'stock');
         document.getElementById('dateMode').classList.toggle('hidden', currentMode !== 'date');
         document.getElementById('sortRow').classList.toggle('hidden', currentMode !== 'date');
-
         showEmptyState();
-
-        // Auto-trigger date search when switching to date mode
         if (currentMode === 'date') {
           const d = document.getElementById('dateInput').value;
           if (d) searchByDate(d);
@@ -853,56 +802,34 @@
       });
     });
 
-    // Stock search
-    document.getElementById('searchInput').addEventListener('input', (e) => {
-      searchStock(e.target.value);
-    });
-
-    // Date input
-    document.getElementById('dateInput').addEventListener('change', (e) => {
-      searchByDate(e.target.value);
-    });
-
-    // Date navigation
+    document.getElementById('searchInput').addEventListener('input', (e) => searchStock(e.target.value));
+    document.getElementById('dateInput').addEventListener('change', (e) => searchByDate(e.target.value));
     document.getElementById('datePrev').addEventListener('click', () => navigateDate('prev'));
     document.getElementById('dateNext').addEventListener('click', () => navigateDate('next'));
 
-    // Filter buttons
     document.querySelectorAll('.filter-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const filter = btn.dataset.filter;
-
-        if (['all', 'tw', 'us'].includes(filter)) {
-          document.querySelectorAll('.filter-btn[data-filter="all"], .filter-btn[data-filter="tw"], .filter-btn[data-filter="us"]')
-            .forEach(b => b.classList.remove('active'));
-          activeFilters.market = filter === 'all' ? 'all' : filter;
-          if (filter === 'all') activeFilters.type = 'all';
+        const f = btn.dataset.filter;
+        if (['all','tw','us'].includes(f)) {
+          document.querySelectorAll('.filter-btn[data-filter="all"],.filter-btn[data-filter="tw"],.filter-btn[data-filter="us"]').forEach(b=>b.classList.remove('active'));
+          activeFilters.market = f === 'all' ? 'all' : f;
+          if (f === 'all') activeFilters.type = 'all';
         }
-
-        if (['vcp', 'sanxian'].includes(filter)) {
-          const wasActive = btn.classList.contains('active');
-          document.querySelectorAll('.filter-btn[data-filter="vcp"], .filter-btn[data-filter="sanxian"]')
-            .forEach(b => b.classList.remove('active'));
-          activeFilters.type = wasActive ? 'all' : filter;
+        if (['vcp','sanxian'].includes(f)) {
+          const was = btn.classList.contains('active');
+          document.querySelectorAll('.filter-btn[data-filter="vcp"],.filter-btn[data-filter="sanxian"]').forEach(b=>b.classList.remove('active'));
+          activeFilters.type = was ? 'all' : f;
         }
-
-        if (filter === 'all') {
-          activeFilters = { market: 'all', type: 'all' };
-          document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-        }
-
-        btn.classList.toggle('active', !btn.classList.contains('active') || filter === 'all');
-
+        if (f === 'all') { activeFilters = {market:'all',type:'all'}; document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active')); }
+        btn.classList.toggle('active', !btn.classList.contains('active') || f === 'all');
         if (activeFilters.market === 'all' && activeFilters.type === 'all') {
-          document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+          document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
           document.querySelector('.filter-btn[data-filter="all"]').classList.add('active');
         }
-
         triggerCurrentSearch();
       });
     });
 
-    // Sort buttons
     document.querySelectorAll('.sort-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
@@ -912,25 +839,7 @@
       });
     });
 
-    // Tag click to toggle tooltip (for mobile + desktop)
-    document.addEventListener('click', (e) => {
-      const tag = e.target.closest('.tag');
-      if (tag && tag.querySelector('.tooltip')) {
-        e.stopPropagation();
-        // Close all other tooltips
-        document.querySelectorAll('.tag.tooltip-open').forEach(t => {
-          if (t !== tag) t.classList.remove('tooltip-open');
-        });
-        tag.classList.toggle('tooltip-open');
-      } else {
-        // Click elsewhere closes all tooltips
-        document.querySelectorAll('.tag.tooltip-open').forEach(t => {
-          t.classList.remove('tooltip-open');
-        });
-      }
-    });
-
-    loadData();
+    loadIndex();
   </script>
 </body>
 </html>

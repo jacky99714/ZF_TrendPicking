@@ -64,9 +64,9 @@ jobs:
           fi
         continue-on-error: true
 
-      # 匯出 JSON
+      # 匯出 JSON（v2 分月格式）
       - name: Export filter results to JSON
-        run: python scripts/export_to_json.py
+        run: python scripts/export_to_json_v2.py
 
       # 設定 GitHub Pages
       - name: Setup Pages
