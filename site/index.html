@@ -253,8 +253,9 @@
 
     .detail-value {
       font-size: 13px; color: var(--text-dim); margin-left: auto;
-      font-variant-numeric: tabular-nums;
+      font-variant-numeric: tabular-nums; white-space: nowrap;
     }
+    .detail-label { color: var(--text-dim); font-size: 11px; margin-right: 3px; }
 
     .detail-value.positive { color: var(--green); }
     .detail-value.negative { color: var(--red); }
@@ -654,12 +655,12 @@
       if (s.return_20d != null) {
         const cls = s.return_20d >= 0 ? 'positive' : 'negative';
         const sign = s.return_20d >= 0 ? '+' : '';
-        details += `<span class="detail-value ${cls}">${sign}${s.return_20d.toFixed(2)}%</span>`;
+        details += `<span class="detail-value ${cls}"><span class="detail-label">20日漲幅</span>${sign}${s.return_20d.toFixed(2)}%</span>`;
       }
       if (s.gap_ratio != null) {
         const cls = s.gap_ratio >= 0 ? 'positive' : 'negative';
         const sign = s.gap_ratio >= 0 ? '+' : '';
-        details += `<span class="detail-value ${cls}">差距${sign}${s.gap_ratio.toFixed(2)}%</span>`;
+        details += `<span class="detail-value ${cls}"><span class="detail-label">突破差距</span>${sign}${s.gap_ratio.toFixed(2)}%</span>`;
       }
 
       return `<div class="date-stock-row ${newOldCls}">
@@ -779,12 +780,12 @@
       if (a.return_20d != null) {
         const cls = a.return_20d >= 0 ? 'positive' : 'negative';
         const sign = a.return_20d >= 0 ? '+' : '';
-        details += `<span class="detail-value ${cls}">${sign}${a.return_20d.toFixed(2)}%</span>`;
+        details += `<span class="detail-value ${cls}"><span class="detail-label">20日漲幅</span>${sign}${a.return_20d.toFixed(2)}%</span>`;
       }
       if (a.gap_ratio != null) {
         const cls = a.gap_ratio >= 0 ? 'positive' : 'negative';
         const sign = a.gap_ratio >= 0 ? '+' : '';
-        details += `<span class="detail-value ${cls}">差距${sign}${a.gap_ratio.toFixed(2)}%</span>`;
+        details += `<span class="detail-value ${cls}"><span class="detail-label">突破差距</span>${sign}${a.gap_ratio.toFixed(2)}%</span>`;
       }
 
       return `<div class="appearance-item ${newOldCls}">
