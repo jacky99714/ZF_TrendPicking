@@ -449,6 +449,7 @@
     let INDEX = null;          // index.json: stocks master + months list
     let MONTH_CACHE = {};      // loaded month data: { "2026-03": [...] }
     let DATE_INDEX = {};       // { date -> [ entries ] } built from loaded months
+    let STOCK_INDEX = {};      // { stock_id -> [ entries with date ] } reverse index for search
     let ALL_DATES = [];        // sorted desc, from all loaded months
     let currentMode = 'stock';
     let activeFilters = { market: 'all', type: 'all' };
@@ -496,18 +497,21 @@
       try {
         const data = await fetchJSON(`data/months/${month}.json`);
         MONTH_CACHE[month] = data;
-        // Merge into DATE_INDEX
+        // Merge into DATE_INDEX + STOCK_INDEX
         for (const e of data) {
           const sid = e.id;
           const stock = INDEX.stocks[sid];
           if (!stock) continue;
-          if (!DATE_INDEX[e.d]) DATE_INDEX[e.d] = [];
-          DATE_INDEX[e.d].push({
+          const entry = {
             stock_id: sid, stock_name: stock.n, market: stock.m, industry: stock.i,
-            type: e.t === 'sx' ? 'sanxian' : 'vcp',
+            date: e.d, type: e.t === 'sx' ? 'sanxian' : 'vcp',
             is_strong: !!e.s, is_new_high: !!e.h,
             return_20d: e.r ?? null, gap_ratio: e.g ?? null,
-          });
+          };
+          if (!DATE_INDEX[e.d]) DATE_INDEX[e.d] = [];
+          DATE_INDEX[e.d].push(entry);
+          if (!STOCK_INDEX[sid]) STOCK_INDEX[sid] = [];
+          STOCK_INDEX[sid].push(entry);
         }
         // Rebuild ALL_DATES
         ALL_DATES = Object.keys(DATE_INDEX).sort().reverse();
@@ -581,26 +585,23 @@
           `<div class="empty-state"><div class="icon">&#128533;</div><p>找不到「${escapeHtml(query)}」的相關結果</p></div>`;
         return;
       }
-      // Only use already-loaded months (no extra fetching)
+      // Use STOCK_INDEX for O(1) lookup
       const results = matchedIds.map(sid => {
         const s = INDEX.stocks[sid];
-        const appearances = [];
-        for (const d of ALL_DATES) {
-          const entries = DATE_INDEX[d];
-          if (!entries) continue;
-          for (const e of entries) {
-            if (e.stock_id !== sid) continue;
-            if (activeFilters.market !== 'all' && e.market !== activeFilters.market) continue;
-            if (activeFilters.type !== 'all' && e.type !== activeFilters.type) continue;
-            appearances.push(e);
-          }
-        }
-        // Total count from index (across all months, not just loaded ones)
+        const all = STOCK_INDEX[sid] || [];
+        const appearances = all.filter(e => {
+          if (activeFilters.market !== 'all' && e.market !== activeFilters.market) return false;
+          if (activeFilters.type !== 'all' && e.type !== activeFilters.type) return false;
+          return true;
+        });
         const totalMonths = s.ms ? s.ms.length : 0;
         return { stock_id: sid, stock_name: s.n, market: s.m, industry: s.i, appearances, totalMonths };
       }).filter(s => s.appearances.length > 0 || s.totalMonths > 0);
 
       results.sort((a, b) => b.appearances.length - a.appearances.length);
+      // Limit to top 50 to avoid rendering lag
+      const totalFound = results.length;
+      if (results.length > 50) results = results.slice(0, 50);
       if (results.length === 0) {
         document.getElementById('content').innerHTML =
           `<div class="empty-state"><div class="icon">&#128533;</div><p>找不到「${escapeHtml(query)}」的相關結果</p></div>`;
@@ -611,25 +612,21 @@
 
     function renderStockResults(stocks) {
       let html = stocks.map(stock => {
-        // Group appearances by date (each appearance already has date info via DATE_INDEX lookup)
+        // Group by date using pre-filtered appearances
         const byDate = {};
-        for (const d of ALL_DATES) {
-          const entries = DATE_INDEX[d];
-          if (!entries) continue;
-          for (const e of entries) {
-            if (e.stock_id !== stock.stock_id) continue;
-            if (!byDate[d]) {
-              byDate[d] = { date: d, is_strong: false, is_new_high: false, is_sanxian: false, return_20d: null, gap_ratio: null };
-            }
-            const bd = byDate[d];
-            if (e.type === 'vcp') {
-              if (e.is_strong) bd.is_strong = true;
-              if (e.is_new_high) bd.is_new_high = true;
-              if (e.return_20d != null) bd.return_20d = e.return_20d;
-            } else {
-              bd.is_sanxian = true;
-              if (e.gap_ratio != null) bd.gap_ratio = e.gap_ratio;
-            }
+        for (const e of stock.appearances) {
+          const d = e.date;
+          if (!byDate[d]) {
+            byDate[d] = { date: d, is_strong: false, is_new_high: false, is_sanxian: false, return_20d: null, gap_ratio: null };
+          }
+          const bd = byDate[d];
+          if (e.type === 'vcp') {
+            if (e.is_strong) bd.is_strong = true;
+            if (e.is_new_high) bd.is_new_high = true;
+            if (e.return_20d != null) bd.return_20d = e.return_20d;
+          } else {
+            bd.is_sanxian = true;
+            if (e.gap_ratio != null) bd.gap_ratio = e.gap_ratio;
           }
         }
         const merged = Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date));
