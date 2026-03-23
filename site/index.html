@@ -812,11 +812,14 @@
       }
     }
 
+    const isMobile = () => window.innerWidth <= 600;
+
     function buildTags(item) {
       let tags = '';
-      if (item.is_strong) tags += '<span class="tag strong">VCP強勢</span> ';
-      if (item.is_new_high) tags += '<span class="tag newhigh">VCP新高</span> ';
-      if (item.is_sanxian) tags += '<span class="tag sanxian">三線開花</span> ';
+      const m = isMobile();
+      if (item.is_strong) tags += `<span class="tag strong">${m ? 'V強' : 'VCP強勢'}</span> `;
+      if (item.is_new_high) tags += `<span class="tag newhigh">${m ? 'V新高' : 'VCP新高'}</span> `;
+      if (item.is_sanxian) tags += `<span class="tag sanxian">${m ? '三花' : '三線開花'}</span> `;
       return tags;
     }
 
