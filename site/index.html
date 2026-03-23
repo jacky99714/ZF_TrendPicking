@@ -306,22 +306,44 @@
     .hidden { display: none !important; }
 
     @media (max-width: 600px) {
-      .container { padding: 12px 8px; }
+      .container { padding: 12px 10px; }
+      header { margin-bottom: 16px; }
       header h1 { font-size: 20px; }
       header p { font-size: 12px; }
 
-      /* Stats: horizontal scroll or smaller */
-      .stats { gap: 6px; }
-      .stat-card { padding: 8px 10px; min-width: 0; flex: 1; }
-      .stat-card .label { font-size: 10px; }
-      .stat-card .value { font-size: 16px; }
+      /* Mode tabs */
+      .mode-tabs { margin-bottom: 16px; }
 
-      /* Filters & sort: smaller */
-      .filters { gap: 5px; margin-bottom: 12px; }
+      /* Date picker: compact */
+      .date-picker-row { gap: 6px; margin-bottom: 10px; }
+      .date-nav-btn { padding: 8px 10px; font-size: 14px; min-width: 36px; }
+
+      /* Quick dates: horizontal scroll, single row */
+      .date-quick-btns {
+        display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px;
+        padding-bottom: 8px; margin-bottom: 8px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+      .date-quick-btns::-webkit-scrollbar { display: none; }
+      .date-quick-btn { font-size: 11px; padding: 4px 8px; flex-shrink: 0; }
+
+      /* Filters + Sort: merged into one compact area */
+      .filters { gap: 5px; margin-bottom: 8px; }
       .filter-btn { padding: 5px 10px; font-size: 12px; }
-      .sort-row { gap: 5px; margin-bottom: 12px; }
+      .sort-row { gap: 5px; margin-bottom: 10px; }
       .sort-btn { padding: 4px 8px; font-size: 11px; }
-      .sort-label { font-size: 12px; }
+      .sort-label { font-size: 11px; margin-right: 2px; }
+
+      /* Stats: single row, compact */
+      .stats { gap: 6px; margin-bottom: 16px; }
+      .stat-card { padding: 6px 8px; min-width: 0; flex: 1; }
+      .stat-card .label { font-size: 9px; margin-bottom: 2px; }
+      .stat-card .value { font-size: 15px; }
+
+      /* Section header */
+      .section-header { flex-direction: column; gap: 4px; align-items: flex-start; padding: 8px 0; margin-bottom: 6px; }
+      .section-count { font-size: 11px; line-height: 1.4; }
 
       /* Stock card header: stack vertically */
       .stock-header { padding: 10px 12px; flex-direction: column; align-items: flex-start; gap: 6px; }
@@ -332,7 +354,7 @@
       .appearance-count strong { font-size: 14px; }
       .appearance-list { padding: 0 8px 10px; }
 
-      /* Appearance row: wrap into 2 rows */
+      /* Appearance row */
       .appearance-item {
         flex-wrap: wrap; gap: 4px 8px; padding: 8px 10px; font-size: 13px;
       }
@@ -350,21 +372,13 @@
       .date-stock-row .detail-value { margin-left: 0; font-size: 12px; }
       .date-stock-row .detail-label { font-size: 10px; }
 
-      /* Tags: prevent vertical text wrap */
+      /* Tags */
       .tag { white-space: nowrap; font-size: 10px; padding: 2px 6px; }
-
-      /* Section header */
-      .section-header { flex-direction: column; gap: 4px; align-items: flex-start; }
-      .section-count { font-size: 11px; }
-
-      /* Date picker */
-      .date-picker-row { gap: 6px; }
-      .date-nav-btn { padding: 8px 10px; font-size: 14px; min-width: 36px; }
-      .date-quick-btns { gap: 4px; }
-      .date-quick-btn { font-size: 11px; padding: 3px 7px; }
-
-      /* New/old label */
       .new-old-label { font-size: 10px; padding: 1px 4px; }
+
+      /* Tooltip on mobile */
+      .tag .tooltip { left: 0; transform: none; max-width: 280px; white-space: normal; }
+      .tag .tooltip::after { left: 20px; transform: none; }
     }
   </style>
 </head>
