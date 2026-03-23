@@ -104,12 +104,16 @@
 
     .date-nav-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-    .date-quick-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+    .date-quick-btns {
+      display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto;
+      padding-bottom: 4px; scrollbar-width: none;
+    }
+    .date-quick-btns::-webkit-scrollbar { display: none; }
 
     .date-quick-btn {
       padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border);
       background: var(--surface); color: var(--text-dim); cursor: pointer;
-      font-size: 12px; transition: all 0.2s;
+      font-size: 12px; transition: all 0.2s; flex-shrink: 0;
     }
 
     .date-quick-btn:hover { border-color: var(--accent); color: var(--text); }
@@ -213,7 +217,7 @@
 
     .tag {
       font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600;
-      position: relative; cursor: pointer;
+      position: relative; cursor: pointer; white-space: nowrap;
     }
 
     .tag .tooltip {
