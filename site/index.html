@@ -613,10 +613,21 @@
     async function loadMoreMonths() {
       const btn = document.querySelector('.load-more-btn');
       if (btn) btn.textContent = '載入中...';
+      // 記住展開的卡片
+      const openIds = new Set();
+      document.querySelectorAll('.stock-card.open .stock-id').forEach(el => openIds.add(el.textContent));
+      // 載入更多月份
       const toLoad = INDEX.months.filter(m => !MONTH_CACHE[m]).slice(0, 3);
       await Promise.all(toLoad.map(m => loadMonth(m)));
       const q = document.getElementById('searchInput').value;
       if (q.trim()) searchStock(q);
+      // 恢復展開狀態
+      if (openIds.size > 0) {
+        document.querySelectorAll('.stock-card').forEach(card => {
+          const idEl = card.querySelector('.stock-id');
+          if (idEl && openIds.has(idEl.textContent)) card.classList.add('open');
+        });
+      }
     }
 
     // === Date Search ===
