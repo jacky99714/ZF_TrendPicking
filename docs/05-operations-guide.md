@@ -151,26 +151,51 @@ python us_main.py health
 ### 3.4 歷史資料補齊
 
 ```bash
-# 台股 backfill
-python main.py backfill
+# 台股 backfill（補齊所有交易日篩選結果）
+python scripts/backfill_all_trading_days.py
 
-# 重新計算並匯出所有日期
-python scripts/reexport_all_dates.py
+# 美股 backfill
+python scripts/backfill_all_trading_days_us.py
 
-# 跳過 backfill，僅重新計算
-python scripts/reexport_all_dates.py --skip-fetch
+# 美股回溯下載歷史股價（2024-05 起）
+python scripts/backfill_us_prices.py
+
+# 修復缺失的 indicator_json（台股 / 美股）
+python scripts/fix_missing_indicators.py
+python scripts/fix_missing_indicators.py --us
+
+# 重新匯出篩選結果到 Google Sheet（從 DB 讀取，不重算）
+python scripts/reexport_all_dates.py --from-db
+python scripts/reexport_all_dates.py --from-db --since 2026-03-01
+python scripts/reexport_all_dates.py --from-db --last 5
 ```
 
-### 3.5 維護腳本
+### 3.5 前端 JSON 匯出
+
+```bash
+# 從 DB 產生拆分 JSON（v2 架構）
+python scripts/export_to_json_v2.py
+# 輸出：site/data/index.json + months/*.json + indicators/*.json
+```
+
+### 3.6 資料驗證
+
+```bash
+# 台股驗證（4 層：完整性、值合理性、新/舊邏輯、篩選準確度）
+python scripts/verify_data.py
+
+# 美股驗證
+python scripts/verify_data.py --us
+```
+
+### 3.7 維護腳本
 
 ```bash
 # 匯出單一股票驗證資料
 python scripts/export_single_stock.py
 
-# 修復零價異常（預覽）
+# 修復零價異常（預覽 / 實際執行）
 python scripts/fix_zero_prices_in_db.py --preview
-
-# 修復零價異常（實際執行）
 python scripts/fix_zero_prices_in_db.py --fix
 
 # 重建台股價格資料
@@ -191,6 +216,7 @@ python scripts/rebuild_price_data.py
 | US Monthly Stock Update | `.github/workflows/us-monthly.yml` | `30 1 1 * *` | 每月1日 09:30 | 美股每月更新 |
 
 另有：
+- `deploy-site.yml`：部署前端查詢網站到 GitHub Pages（每日篩選完成後自動觸發，或手動觸發）
 - `test-schedule.yml`：排程測試用（UTC 16:15）
 - `export-stock.yml`：手動觸發，匯出單一股票資料
 

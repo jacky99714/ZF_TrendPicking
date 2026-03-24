@@ -32,6 +32,10 @@
 
 ```
 ┌─────────────────────────────────────────────────┐
+│                前端查詢網站                        │
+│   site/index.html (Glassmorphism, lazy loading)  │
+│   site/data/ (index.json + months/ + indicators/)│
+├─────────────────────────────────────────────────┤
 │                  主程式入口                        │
 │              main.py / us_main.py                │
 ├─────────────────────────────────────────────────┤
@@ -44,9 +48,9 @@
 │   vcp_filter.py       │     google_sheet.py       │
 │   sanxian_filter.py   │     us_google_sheet.py    │
 │   moving_average.py   │                           │
-│   us_vcp_filter.py    │                           │
-│   us_sanxian_filter.py│                           │
-│   us_moving_average.py│                           │
+│   us_vcp_filter.py    │  scripts/                 │
+│   us_sanxian_filter.py│   export_to_json_v2.py    │
+│   us_moving_average.py│   verify_data.py          │
 ├──────────────────────┴──────────────────────────┤
 │                   資料層                          │
 │         data/database.py (台股 SQLite)            │
@@ -163,14 +167,39 @@ get_stock_price() 呼叫
 | `utils/us_split_detector.py` | `USSplitDetector` | 美股分割/合股偵測：比對 DB 與 yfinance 歷史價格，自動標記需重新下載的股票 |
 | `utils/performance.py` | `PerformanceMonitor` | 效能監控裝飾器，統計函數執行時間 |
 
-### 3.9 維護腳本 (`scripts/`)
+### 3.9 前端查詢網站 (`site/`)
+
+| 檔案 | 說明 |
+|------|------|
+| `site/index.html` | 前端單頁應用（Glassmorphism 風格），含搜尋、日期查詢、排序、新/舊標記 |
+| `site/data/index.json` | 股票主檔 + 月份清單 + 資料範圍（`first_date`, `last_date`） |
+| `site/data/months/{YYYY-MM}.json` | 各月篩選結果（lazy load） |
+| `site/data/indicators/{YYYY-MM}.json` | 指標 tooltip 資料（點擊 tag 時載入） |
+
+前端架構特性：
+- **拆分 JSON**：避免一次載入 88MB，改為 `index.json`（~1.2MB）+ 按月 lazy load
+- **反向索引**：`STOCK_INDEX` 實現 O(1) 股票搜尋
+- **debounce**：搜尋輸入 300ms 防抖 + 50 筆結果限制
+- **新/舊標記**：跨類型比較前一交易日（VCP + 三線開花合併）
+- **排序功能**：綜合、新股優先、20日漲幅、突破差距
+
+### 3.10 維護腳本 (`scripts/`)
 
 | 檔案 | 用途 |
 |------|------|
+| `scripts/export_to_json_v2.py` | 從 DB 匯出拆分 JSON 到 `site/data/`（index + months + indicators） |
+| `scripts/export_to_json.py` | 舊版單檔匯出（已棄用） |
 | `scripts/export_single_stock.py` | 匯出單一股票完整驗證資料到 Google Sheet |
 | `scripts/fix_zero_prices_in_db.py` | 修復資料庫中 close_price=0 的異常資料 |
 | `scripts/rebuild_price_data.py` | 使用 FinMind 重建台股價格歷史 |
-| `scripts/reexport_all_dates.py` | 重新計算並匯出所有日期的篩選結果（支援 backfill） |
+| `scripts/reexport_all_dates.py` | 重新匯出篩選結果到 Google Sheet（支援 `--from-db` 從 DB 直接讀取） |
+| `scripts/backfill_all_trading_days.py` | 台股：補齊所有交易日的篩選結果（非僅星期五） |
+| `scripts/backfill_all_trading_days_us.py` | 美股：補齊所有交易日的篩選結果 |
+| `scripts/backfill_fridays.py` | 台股：補齊星期五的篩選結果（含 `run_filters_for_date`） |
+| `scripts/backfill_fridays_us.py` | 美股：補齊星期五的篩選結果 |
+| `scripts/backfill_us_prices.py` | 美股：回溯下載歷史股價至 2024-05 |
+| `scripts/fix_missing_indicators.py` | 修復缺失的 `indicator_json`（台股 `--tw` / 美股 `--us`） |
+| `scripts/verify_data.py` | 4 層資料驗證：完整性、值合理性、新/舊邏輯、篩選準確度 |
 
 ---
 
@@ -206,6 +235,15 @@ get_stock_price() 呼叫
           │
           ▼
 [備份資料庫到 Release]
+          │
+          ▼
+[觸發 Deploy Site workflow]
+          │
+          ▼
+[export_to_json_v2.py → 產生拆分 JSON]
+          │
+          ▼
+[部署到 GitHub Pages]
 ```
 
 ### 4.2 美股每日任務額外流程：分割偵測
