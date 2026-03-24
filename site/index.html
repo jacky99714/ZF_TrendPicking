@@ -688,8 +688,8 @@
       if (ALL_DATES.length === 0) return;
       const dateInput = document.getElementById('dateInput');
       if (!dateInput.value) dateInput.value = ALL_DATES[0];
-      dateInput.min = ALL_DATES[ALL_DATES.length - 1];
-      dateInput.max = ALL_DATES[0];
+      dateInput.min = INDEX.first_date || ALL_DATES[ALL_DATES.length - 1];
+      dateInput.max = INDEX.last_date || ALL_DATES[0];
       // Quick date buttons (last 10)
       const quickContainer = document.getElementById('dateQuickBtns');
       const recent = ALL_DATES.slice(0, 10);
