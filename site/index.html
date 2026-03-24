@@ -6,25 +6,25 @@
   <title>ZF TrendPicking - 股票篩選查詢</title>
   <style>
     :root {
-      --bg: #0a0e1a;
+      --bg: #0a1018;
       --surface: rgba(255, 255, 255, 0.05);
       --surface-hover: rgba(255, 255, 255, 0.08);
       --surface-strong: rgba(255, 255, 255, 0.1);
       --border: rgba(255, 255, 255, 0.08);
       --border-hover: rgba(255, 255, 255, 0.18);
-      --text: #f0f0f5;
+      --text: #ecfeff;
       --text-dim: rgba(255, 255, 255, 0.45);
       --text-mid: rgba(255, 255, 255, 0.65);
-      --accent: #818cf8;
-      --accent-glow: rgba(129, 140, 248, 0.25);
-      --accent-solid: #6366f1;
+      --accent: #22d3ee;
+      --accent-glow: rgba(34, 211, 238, 0.25);
+      --accent-solid: #06b6d4;
       --green: #34d399;
       --green-dim: rgba(52, 211, 153, 0.15);
       --red: #fb7185;
       --red-dim: rgba(251, 113, 133, 0.15);
       --orange: #fbbf24;
-      --tag-vcp: #60a5fa;
-      --tag-sanxian: #c084fc;
+      --tag-vcp: #38bdf8;
+      --tag-sanxian: #a78bfa;
       --tag-strong: #34d399;
       --tag-newhigh: #fbbf24;
       --glass-blur: 20px;
@@ -47,9 +47,9 @@
     body::before {
       content: '';
       position: fixed; top: -50%; left: -50%; width: 200%; height: 200%;
-      background: radial-gradient(ellipse at 20% 50%, rgba(99, 102, 241, 0.12) 0%, transparent 50%),
-                  radial-gradient(ellipse at 80% 20%, rgba(168, 85, 247, 0.1) 0%, transparent 50%),
-                  radial-gradient(ellipse at 50% 80%, rgba(59, 130, 246, 0.08) 0%, transparent 50%);
+      background: radial-gradient(ellipse at 20% 50%, rgba(6, 182, 212, 0.12) 0%, transparent 50%),
+                  radial-gradient(ellipse at 80% 20%, rgba(34, 211, 238, 0.08) 0%, transparent 50%),
+                  radial-gradient(ellipse at 50% 80%, rgba(56, 189, 248, 0.08) 0%, transparent 50%);
       animation: bgShift 20s ease-in-out infinite alternate;
       z-index: 0; pointer-events: none;
     }
@@ -78,7 +78,7 @@
 
     header h1 {
       font-size: 32px; font-weight: 800; margin-bottom: 6px; letter-spacing: -0.5px;
-      background: linear-gradient(135deg, #818cf8 0%, #c084fc 50%, #60a5fa 100%);
+      background: linear-gradient(135deg, #06b6d4 0%, #22d3ee 50%, #38bdf8 100%);
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text;
     }
@@ -104,7 +104,7 @@
     .mode-tab:hover { color: var(--text); background: rgba(255,255,255,0.04); }
 
     .mode-tab.active {
-      background: linear-gradient(135deg, var(--accent-solid), #7c3aed);
+      background: linear-gradient(135deg, var(--accent-solid), #0891b2);
       color: white;
       box-shadow: 0 4px 15px var(--accent-glow);
     }
@@ -205,7 +205,7 @@
     .filter-btn:hover { border-color: var(--border-hover); color: var(--text); }
 
     .filter-btn.active {
-      background: linear-gradient(135deg, var(--accent-solid), #7c3aed);
+      background: linear-gradient(135deg, var(--accent-solid), #0891b2);
       border-color: transparent; color: white;
       box-shadow: 0 2px 12px var(--accent-glow);
     }
@@ -226,7 +226,7 @@
     .sort-btn:hover { border-color: var(--border-hover); color: var(--text); }
 
     .sort-btn.active {
-      background: linear-gradient(135deg, var(--accent-solid), #7c3aed);
+      background: linear-gradient(135deg, var(--accent-solid), #0891b2);
       border-color: transparent; color: white;
       box-shadow: 0 2px 12px var(--accent-glow);
     }
@@ -305,13 +305,13 @@
     }
 
     .market-badge.tw {
-      background: rgba(96, 165, 250, 0.12); color: #93bbfc;
-      border: 1px solid rgba(96, 165, 250, 0.2);
+      background: rgba(34, 211, 238, 0.12); color: #67e8f9;
+      border: 1px solid rgba(34, 211, 238, 0.2);
     }
 
     .market-badge.us {
-      background: rgba(251, 113, 133, 0.12); color: #fca5b5;
-      border: 1px solid rgba(251, 113, 133, 0.2);
+      background: rgba(251, 191, 36, 0.1); color: #fde68a;
+      border: 1px solid rgba(251, 191, 36, 0.18);
     }
 
     .appearance-count {
@@ -381,8 +381,8 @@
       .tag .tooltip::after { left: 20px; transform: none; }
     }
 
-    .tag.vcp { background: rgba(96, 165, 250, 0.12); color: var(--tag-vcp); border: 1px solid rgba(96, 165, 250, 0.2); }
-    .tag.sanxian { background: rgba(192, 132, 252, 0.12); color: var(--tag-sanxian); border: 1px solid rgba(192, 132, 252, 0.2); }
+    .tag.vcp { background: rgba(56, 189, 248, 0.12); color: var(--tag-vcp); border: 1px solid rgba(56, 189, 248, 0.2); }
+    .tag.sanxian { background: rgba(167, 139, 250, 0.12); color: var(--tag-sanxian); border: 1px solid rgba(167, 139, 250, 0.2); }
     .tag.strong { background: rgba(52, 211, 153, 0.12); color: var(--tag-strong); border: 1px solid rgba(52, 211, 153, 0.2); }
     .tag.newhigh { background: rgba(251, 191, 36, 0.12); color: var(--tag-newhigh); border: 1px solid rgba(251, 191, 36, 0.2); }
 
