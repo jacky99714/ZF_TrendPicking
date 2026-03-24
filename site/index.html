@@ -231,24 +231,8 @@
       box-shadow: 0 2px 12px var(--accent-glow);
     }
 
-    /* Stats */
-    .stats { display: flex; gap: 12px; margin-bottom: 28px; flex-wrap: wrap; }
-
-    .stat-card {
-      background: var(--surface); backdrop-filter: blur(var(--glass-blur));
-      -webkit-backdrop-filter: blur(var(--glass-blur));
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm); padding: 16px 20px; flex: 1; min-width: 100px;
-      transition: all 0.3s ease;
-    }
-
-    .stat-card:hover {
-      border-color: var(--border-hover);
-      background: var(--surface-hover);
-    }
-
-    .stat-card .label { font-size: 11px; color: var(--text-dim); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
-    .stat-card .value { font-size: 22px; font-weight: 700; background: linear-gradient(135deg, var(--text), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    /* Footer info */
+    #footerInfo { color: var(--text-dim); font-size: 12px; margin-bottom: 6px; }
 
     /* Loading & empty */
     .loading { text-align: center; padding: 80px 0; color: var(--text-dim); }
@@ -508,11 +492,6 @@
       .sort-btn { padding: 5px 10px; font-size: 11px; }
       .sort-label { font-size: 11px; margin-right: 2px; }
 
-      .stats { gap: 6px; margin-bottom: 16px; }
-      .stat-card { padding: 10px 10px; min-width: 0; flex: 1; }
-      .stat-card .label { font-size: 9px; margin-bottom: 2px; }
-      .stat-card .value { font-size: 16px; }
-
       .section-header { flex-direction: column; gap: 4px; align-items: flex-start; padding: 8px 0; margin-bottom: 6px; }
       .section-count { font-size: 11px; line-height: 1.4; }
 
@@ -597,21 +576,6 @@
       <button class="sort-btn" data-sort="gap">突破差距</button>
     </div>
 
-    <div class="stats" id="stats">
-      <div class="stat-card">
-        <div class="label">資料更新</div>
-        <div class="value" id="statDate">-</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">總股票數</div>
-        <div class="value" id="statStocks">-</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">總紀錄數</div>
-        <div class="value" id="statRecords">-</div>
-      </div>
-    </div>
-
     <div id="content">
       <div class="loading">
         <div class="spinner"></div>
@@ -620,6 +584,7 @@
     </div>
 
     <footer>
+      <p id="footerInfo">載入中...</p>
       <p>ZF TrendPicking &copy; 2026 | 資料來源：FinMind + yfinance</p>
     </footer>
   </div>
@@ -646,9 +611,10 @@
     async function loadIndex() {
       try {
         INDEX = await fetchJSON('data/index.json');
-        document.getElementById('statDate').textContent = INDEX.generated_at;
-        document.getElementById('statStocks').textContent = INDEX.total_stocks.toLocaleString();
-        document.getElementById('statRecords').textContent = INDEX.total_records.toLocaleString();
+        const firstMonth = INDEX.months[INDEX.months.length - 1];
+        const lastMonth = INDEX.months[0];
+        document.getElementById('footerInfo').textContent =
+          `資料範圍 ${firstMonth} ~ ${lastMonth} | 共 ${INDEX.total_stocks.toLocaleString()} 檔股票、${INDEX.total_records.toLocaleString()} 筆紀錄 | 更新於 ${INDEX.generated_at}`;
 
         // Collect ALL dates from all months (we'll load data lazily)
         ALL_DATES = [];
