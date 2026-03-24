@@ -177,11 +177,14 @@ def main():
 
     # === 3. 寫入 index.json ===
     sorted_months = sorted(all_months, reverse=True)
+    all_dates = sorted({r["d"] for r in all_results})
 
     index = {
         "generated_at": date.today().isoformat(),
         "total_records": len(all_results),
         "total_stocks": len(stocks),
+        "first_date": all_dates[0] if all_dates else "",
+        "last_date": all_dates[-1] if all_dates else "",
         "months": sorted_months,
         "stocks": stocks,
     }

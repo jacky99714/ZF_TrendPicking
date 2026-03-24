@@ -611,10 +611,8 @@
     async function loadIndex() {
       try {
         INDEX = await fetchJSON('data/index.json');
-        const firstMonth = INDEX.months[INDEX.months.length - 1];
-        const lastMonth = INDEX.months[0];
         document.getElementById('footerInfo').textContent =
-          `資料範圍 ${firstMonth} ~ ${lastMonth} | 共 ${INDEX.total_stocks.toLocaleString()} 檔股票、${INDEX.total_records.toLocaleString()} 筆紀錄 | 更新於 ${INDEX.generated_at}`;
+          `資料範圍 ${INDEX.first_date || '—'} ~ ${INDEX.last_date || '—'} | 共 ${INDEX.total_stocks.toLocaleString()} 檔股票、${INDEX.total_records.toLocaleString()} 筆紀錄 | 更新於 ${INDEX.generated_at}`;
 
         // Collect ALL dates from all months (we'll load data lazily)
         ALL_DATES = [];
