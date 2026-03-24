@@ -1080,7 +1080,11 @@
       clearTimeout(searchTimer);
       searchTimer = setTimeout(() => searchStock(e.target.value), 300);
     });
-    document.getElementById('dateInput').addEventListener('change', (e) => searchByDate(e.target.value));
+    let dateTimer = null;
+    document.getElementById('dateInput').addEventListener('change', (e) => {
+      clearTimeout(dateTimer);
+      dateTimer = setTimeout(() => searchByDate(e.target.value), 400);
+    });
     document.getElementById('datePrev').addEventListener('click', () => navigateDate('prev'));
     document.getElementById('dateNext').addEventListener('click', () => navigateDate('next'));
 
