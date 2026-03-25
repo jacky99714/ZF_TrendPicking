@@ -14,6 +14,7 @@ from calculators.vcp_filter import VCPFilter, calculate_market_return
 from calculators.sanxian_filter import SanxianFilter
 from exporters.google_sheet import GoogleSheetExporter
 from utils.trading_calendar import TradingCalendar
+from utils.split_detector import SplitDetector
 
 
 class DailyTask:
@@ -22,11 +23,12 @@ class DailyTask:
 
     執行流程:
     1. 取得當日股價（yfinance 批量查詢）
-    2. 取得當日大盤指數
-    3. 更新 SQLite 資料庫
-    4. 執行 VCP 篩選
-    5. 執行三線開花篩選
-    6. 匯出至 Google Sheet
+    2. 更新 SQLite 資料庫
+    3. 除權息/減資偵測（比對 DB vs FinMind 還原權息價）
+    4. 取得當日大盤指數
+    5. 執行 VCP 篩選
+    6. 執行三線開花篩選
+    7. 匯出至 Google Sheet
     """
 
     def __init__(
@@ -96,6 +98,7 @@ class DailyTask:
             "success": False,
             "skipped": False,
             "price_count": 0,
+            "split_refreshed_count": 0,
             "vcp_count": 0,
             "sanxian_count": 0,
             "errors": [],
@@ -128,17 +131,21 @@ class DailyTask:
                 logger.warning("無股價資料，任務結束")
                 return result
 
-            # Step 3: 取得並儲存大盤指數
+            # Step 3: 減資/分割偵測
+            split_count = self._detect_and_refresh_splits(target_date, stock_info)
+            result["split_refreshed_count"] = split_count
+
+            # Step 4: 取得並儲存大盤指數
             market_count = self._fetch_and_save_market_index(target_date)
             if market_count == 0:
                 logger.warning("無大盤指數資料，VCP 篩選可能不準確")
 
-            # Step 4: 執行篩選
+            # Step 5: 執行篩選
             vcp_results, sanxian_results, market_return = self._run_filters(target_date)
             result["vcp_count"] = len(vcp_results)
             result["sanxian_count"] = len(sanxian_results)
 
-            # Step 5: 匯出至 Google Sheet（包含驗證資料）
+            # Step 6: 匯出至 Google Sheet（包含驗證資料）
             self._export_to_sheet(target_date, vcp_results, sanxian_results, market_return)
 
             result["success"] = True
@@ -193,6 +200,74 @@ class DailyTask:
 
         count = self.db.upsert_market_index(market_df)
         return count
+
+    def _detect_and_refresh_splits(self, target_date: date, stock_info: dict) -> int:
+        """偵測除權息/減資並重新下載受影響股票的完整歷史
+
+        用 FinMind TaiwanStockPriceAdj（還原權息價）比對 DB 中前一交易日的
+        未調整收盤價。差異超過 1% 的股票需要重新下載歷史以確保均線正確。
+
+        Returns:
+            重新下載的股票數量
+        """
+        prev_date = TradingCalendar.get_previous_trading_day(target_date)
+        if not prev_date:
+            return 0
+
+        # 取得 DB 中前一交易日收盤價（未調整）
+        prev_prices_df = self.db.get_daily_prices(prev_date, prev_date)
+        if prev_prices_df.empty:
+            logger.info("DB 中無前一交易日資料，跳過除權息偵測")
+            return 0
+
+        db_prices = dict(zip(
+            prev_prices_df["stock_id"],
+            prev_prices_df["close_price"],
+        ))
+
+        # 從 FinMind 取得同日還原權息價
+        adj_prices = SplitDetector.fetch_adjusted_prices(prev_date)
+        if not adj_prices:
+            logger.warning("無法取得 FinMind 還原股價，跳過除權息偵測")
+            return 0
+
+        logger.info(f"除權息偵測：比對 {len(adj_prices)} 檔股票的 DB vs 還原權息價")
+
+        # 偵測有差異的股票
+        adjusted_stocks = SplitDetector.detect_adjusted_stocks(db_prices, adj_prices)
+
+        if not adjusted_stocks:
+            logger.info("未偵測到除權息/減資，所有價格一致")
+            return 0
+
+        logger.warning(
+            f"偵測到 {len(adjusted_stocks)} 檔股票有價格調整（除權息/減資）: "
+            f"{adjusted_stocks[:10]}{'...' if len(adjusted_stocks) > 10 else ''}"
+        )
+
+        # 用 FinMind 還原股價重新下載受影響股票的 365 天完整歷史
+        history_start = target_date - timedelta(days=365)
+        logger.info(
+            f"開始重新下載 {len(adjusted_stocks)} 檔股票的還原權息歷史 "
+            f"({history_start} ~ {target_date})..."
+        )
+
+        records = SplitDetector.fetch_adjusted_history(
+            adjusted_stocks, history_start, target_date
+        )
+
+        if not records:
+            logger.warning("重新下載還原歷史資料為空")
+            return 0
+
+        history_df = pd.DataFrame(records)
+        count = self.db.upsert_daily_price(history_df)
+        logger.info(
+            f"已重新下載並更新 {len(adjusted_stocks)} 檔股票的歷史資料 "
+            f"(共 {count} 筆)"
+        )
+
+        return len(adjusted_stocks)
 
     def _run_filters(self, target_date: date) -> tuple[list[dict], list[dict], float]:
         """執行篩選
