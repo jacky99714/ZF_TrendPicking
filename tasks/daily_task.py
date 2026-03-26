@@ -15,6 +15,7 @@ from calculators.sanxian_filter import SanxianFilter
 from exporters.google_sheet import GoogleSheetExporter
 from utils.trading_calendar import TradingCalendar
 from utils.split_detector import SplitDetector
+from utils.daily_verifier import DailyVerifier
 
 
 class DailyTask:
@@ -147,6 +148,14 @@ class DailyTask:
 
             # Step 6: 匯出至 Google Sheet（包含驗證資料）
             self._export_to_sheet(target_date, vcp_results, sanxian_results, market_return)
+
+            # Step 7: 每日自動驗證
+            verifier = DailyVerifier(self.db, market="tw", min_price_count=1500)
+            verify_ok = verifier.verify_all(
+                target_date, vcp_results, sanxian_results,
+                price_count, market_return,
+            )
+            result["verification_passed"] = verify_ok
 
             result["success"] = True
             logger.info(

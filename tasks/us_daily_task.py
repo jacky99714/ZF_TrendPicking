@@ -15,6 +15,7 @@ from calculators.us_sanxian_filter import USSanxianFilter
 from exporters.us_google_sheet import USGoogleSheetExporter
 from utils.us_trading_calendar import USMarketCalendar
 from utils.us_split_detector import USSplitDetector
+from utils.daily_verifier import DailyVerifier
 
 
 class USDailyTask:
@@ -147,6 +148,14 @@ class USDailyTask:
 
             # Step 5: 匯出至美股 Google Sheet
             self._export_to_sheet(target_date, vcp_results, sanxian_results, market_return)
+
+            # Step 6: 每日自動驗證
+            verifier = DailyVerifier(self.db, market="us", min_price_count=7000)
+            verify_ok = verifier.verify_all(
+                target_date, vcp_results, sanxian_results,
+                price_count, market_return,
+            )
+            result["verification_passed"] = verify_ok
 
             result["success"] = True
             logger.info(
