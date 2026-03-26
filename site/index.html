@@ -553,12 +553,12 @@
 
     <!-- Mode tabs -->
     <div class="mode-tabs">
-      <button class="mode-tab active" data-mode="stock">搜尋股票</button>
-      <button class="mode-tab" data-mode="date">按日期查詢</button>
+      <button class="mode-tab active" data-mode="date">按日期查詢</button>
+      <button class="mode-tab" data-mode="stock">搜尋股票</button>
     </div>
 
     <!-- Stock search (mode=stock) -->
-    <div id="stockMode">
+    <div id="stockMode" class="hidden">
       <div class="search-box">
         <span class="search-icon">&#128269;</span>
         <input type="text" id="searchInput" placeholder="輸入股票代號或名稱（例：2330、台積電、AAPL）" autocomplete="off">
@@ -566,7 +566,7 @@
     </div>
 
     <!-- Date search (mode=date) -->
-    <div id="dateMode" class="hidden">
+    <div id="dateMode">
       <div class="date-picker-row">
         <button class="date-nav-btn" id="datePrev" title="前一個有資料的日期">&#9664;</button>
         <input type="date" id="dateInput">
@@ -585,7 +585,7 @@
     </div>
 
     <!-- Sort (date mode only) -->
-    <div class="sort-row hidden" id="sortRow">
+    <div class="sort-row" id="sortRow">
       <span class="sort-label">排序</span>
       <button class="sort-btn active" data-sort="default">綜合</button>
       <button class="sort-btn" data-sort="new-first">新股優先</button>
@@ -614,7 +614,7 @@
     let DATE_INDEX = {};       // { date -> [ entries ] } built from loaded months
     let STOCK_INDEX = {};      // { stock_id -> [ entries with date ] } reverse index for search
     let ALL_DATES = [];        // sorted desc, from all loaded months
-    let currentMode = 'stock';
+    let currentMode = 'date';
     let activeFilters = { market: 'all', type: 'all' };
     let currentSort = 'default';
     let loadingMonths = new Set();
