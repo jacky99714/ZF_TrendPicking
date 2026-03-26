@@ -136,6 +136,14 @@ def main():
     us = query_results(us_db, "us_filter_result", "us", "sector")
     all_results = tw + us
 
+    # 取得台股 stock_type（twse/tpex）用於 TradingView 匯出
+    tw_stock_types = {}
+    if os.path.exists(tw_db):
+        tw_conn = sqlite3.connect(tw_db)
+        for row in tw_conn.execute("SELECT stock_id, stock_type FROM stock_info"):
+            tw_stock_types[row[0]] = row[1]
+        tw_conn.close()
+
     # === 1. 建立股票主檔 ===
     stocks = {}
     stock_months = defaultdict(set)  # stock_id -> set of months
@@ -146,7 +154,11 @@ def main():
         stock_months[sid].add(month)
 
         if sid not in stocks:
-            stocks[sid] = {"n": r["n"], "m": r["m"], "i": r["i"]}
+            info = {"n": r["n"], "m": r["m"], "i": r["i"]}
+            # 台股加入 exchange（twse/tpex）給 TradingView 用
+            if r["m"] == "tw" and sid in tw_stock_types:
+                info["e"] = tw_stock_types[sid]
+            stocks[sid] = info
 
     # 加入每檔股票出現的月份列表（讓搜尋知道要載入哪些月份）
     for sid, info in stocks.items():

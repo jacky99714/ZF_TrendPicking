@@ -1084,7 +1084,9 @@
 
       const symbols = currentVisibleStocks.map(s => {
         if (s.market === 'tw') {
-          return `TWSE:${s.stock_id}`;
+          const stock = INDEX.stocks[s.stock_id];
+          const exchange = (stock && stock.e === 'tpex') ? 'TPEX' : 'TWSE';
+          return `${exchange}:${s.stock_id}`;
         }
         return `${s.stock_id}`;
       });
