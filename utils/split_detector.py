@@ -13,6 +13,7 @@
 - 只有在「新的」除權息事件發生後，還原價才會與 DB 中舊資料不同
 """
 import os
+from datetime import date as date_type
 
 import requests
 from dotenv import load_dotenv
@@ -113,7 +114,7 @@ class SplitDetector:
                 for row in data["data"]:
                     all_records.append({
                         "stock_id": row["stock_id"],
-                        "date": row["date"],
+                        "date": date_type.fromisoformat(row["date"]),
                         "open": row.get("open", 0),
                         "high": row.get("max", 0),
                         "low": row.get("min", 0),
