@@ -231,6 +231,23 @@
       box-shadow: 0 2px 12px var(--accent-glow);
     }
 
+    /* TV export button */
+    .tv-btn {
+      margin-left: auto;
+      background: rgba(19, 131, 235, 0.12) !important;
+      color: #2196F3 !important;
+      border-color: rgba(19, 131, 235, 0.3) !important;
+    }
+    .tv-btn:hover {
+      background: rgba(19, 131, 235, 0.25) !important;
+      border-color: #2196F3 !important;
+    }
+    .tv-btn.copied {
+      background: rgba(52, 211, 153, 0.15) !important;
+      color: var(--green) !important;
+      border-color: rgba(52, 211, 153, 0.3) !important;
+    }
+
     /* Footer info */
     #footerInfo { color: var(--text-dim); font-size: 12px; margin-bottom: 6px; }
 
@@ -574,6 +591,7 @@
       <button class="sort-btn" data-sort="new-first">新股優先</button>
       <button class="sort-btn" data-sort="return">20日漲幅</button>
       <button class="sort-btn" data-sort="gap">突破差距</button>
+      <button class="sort-btn tv-btn" id="tvExportBtn" title="複製清單到剪貼簿並開啟 TradingView">TV 匯出</button>
     </div>
 
     <div id="content">
@@ -600,6 +618,7 @@
     let activeFilters = { market: 'all', type: 'all' };
     let currentSort = 'default';
     let loadingMonths = new Set();
+    let currentVisibleStocks = [];  // 目前畫面上的股票 [{stock_id, market}, ...]
 
     // === Data Loading ===
     async function fetchJSON(url) {
@@ -901,6 +920,7 @@
       </div>`;
       html += merged.map(s => renderDateStockRow(s)).join('');
       document.getElementById('content').innerHTML = `<div class="results">${html}</div>`;
+      currentVisibleStocks = merged.map(s => ({ stock_id: s.stock_id, market: s.market }));
     }
 
     function renderDateStockRow(s) {
@@ -1058,6 +1078,28 @@
       searchByDate(ALL_DATES[newIdx]);
     }
 
+    // === TradingView Export ===
+    function exportToTradingView() {
+      if (currentVisibleStocks.length === 0) return;
+
+      const symbols = currentVisibleStocks.map(s => {
+        if (s.market === 'tw') {
+          return `TWSE:${s.stock_id}`;
+        }
+        return `${s.stock_id}`;
+      });
+
+      const text = symbols.join(',');
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('tvExportBtn');
+        btn.textContent = `已複製 ${symbols.length} 檔`;
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'TV 匯出'; btn.classList.remove('copied'); }, 2000);
+      });
+
+      window.open('https://www.tradingview.com/chart/', '_blank');
+    }
+
     // === Event Listeners ===
     document.querySelectorAll('.mode-tab').forEach(tab => {
       tab.addEventListener('click', () => {
@@ -1090,6 +1132,7 @@
     });
     document.getElementById('datePrev').addEventListener('click', () => navigateDate('prev'));
     document.getElementById('dateNext').addEventListener('click', () => navigateDate('next'));
+    document.getElementById('tvExportBtn').addEventListener('click', exportToTradingView);
 
     document.querySelectorAll('.filter-btn').forEach(btn => {
       btn.addEventListener('click', () => {
