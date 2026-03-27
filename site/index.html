@@ -210,6 +210,8 @@
       box-shadow: 0 2px 12px var(--accent-glow);
     }
 
+    .filter-label { font-size: 13px; color: var(--text-dim); margin-right: 4px; white-space: nowrap; }
+
     /* Sort buttons */
     .sort-row { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
     .sort-label { font-size: 13px; color: var(--text-dim); margin-right: 4px; }
@@ -503,8 +505,9 @@
       .date-quick-btns::-webkit-scrollbar { display: none; }
       .date-quick-btn { font-size: 11px; padding: 4px 8px; flex-shrink: 0; }
 
-      .filters { gap: 6px; margin-bottom: 10px; }
+      .filters { gap: 6px; margin-bottom: 8px; }
       .filter-btn { padding: 6px 12px; font-size: 12px; }
+      .filter-label { font-size: 11px; margin-right: 2px; }
       .sort-row { gap: 6px; margin-bottom: 12px; }
       .sort-btn { padding: 5px 10px; font-size: 11px; }
       .sort-label { font-size: 11px; margin-right: 2px; }
@@ -577,11 +580,16 @@
 
     <!-- Shared filters -->
     <div class="filters">
-      <button class="filter-btn active" data-filter="all">全部</button>
-      <button class="filter-btn" data-filter="tw">台股</button>
-      <button class="filter-btn" data-filter="us">美股</button>
-      <button class="filter-btn" data-filter="vcp">VCP</button>
-      <button class="filter-btn" data-filter="sanxian">三線開花</button>
+      <span class="filter-label">市場</span>
+      <button class="filter-btn active" data-filter="all" data-group="market">全部</button>
+      <button class="filter-btn" data-filter="tw" data-group="market">台股</button>
+      <button class="filter-btn" data-filter="us" data-group="market">美股</button>
+    </div>
+    <div class="filters">
+      <span class="filter-label">類型</span>
+      <button class="filter-btn" data-filter="strong" data-group="type">VCP強勢</button>
+      <button class="filter-btn" data-filter="newhigh" data-group="type">VCP新高</button>
+      <button class="filter-btn" data-filter="sanxian" data-group="type">三線開花</button>
     </div>
 
     <!-- Sort (date mode only) -->
@@ -615,7 +623,7 @@
     let STOCK_INDEX = {};      // { stock_id -> [ entries with date ] } reverse index for search
     let ALL_DATES = [];        // sorted desc, from all loaded months
     let currentMode = 'date';
-    let activeFilters = { market: 'all', type: 'all' };
+    let activeFilters = { market: 'all', types: new Set() };  // types: multi-select (strong, newhigh, sanxian)
     let currentSort = 'default';
     let loadingMonths = new Set();
     let currentVisibleStocks = [];  // 目前畫面上的股票 [{stock_id, market}, ...]
@@ -754,7 +762,12 @@
         const all = STOCK_INDEX[sid] || [];
         const appearances = all.filter(e => {
           if (activeFilters.market !== 'all' && e.market !== activeFilters.market) return false;
-          if (activeFilters.type !== 'all' && e.type !== activeFilters.type) return false;
+          if (activeFilters.types.size > 0) {
+            const match = (activeFilters.types.has('strong') && e.type === 'vcp' && e.is_strong)
+              || (activeFilters.types.has('newhigh') && e.type === 'vcp' && e.is_new_high)
+              || (activeFilters.types.has('sanxian') && e.type === 'sanxian');
+            if (!match) return false;
+          }
           return true;
         });
         const totalMonths = s.ms ? s.ms.length : 0;
@@ -1139,22 +1152,25 @@
     document.querySelectorAll('.filter-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const f = btn.dataset.filter;
-        if (['all','tw','us'].includes(f)) {
-          document.querySelectorAll('.filter-btn[data-filter="all"],.filter-btn[data-filter="tw"],.filter-btn[data-filter="us"]').forEach(b=>b.classList.remove('active'));
+        const group = btn.dataset.group;
+
+        if (group === 'market') {
+          // 市場：互斥選取
+          document.querySelectorAll('.filter-btn[data-group="market"]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
           activeFilters.market = f === 'all' ? 'all' : f;
-          if (f === 'all') activeFilters.type = 'all';
         }
-        if (['vcp','sanxian'].includes(f)) {
-          const was = btn.classList.contains('active');
-          document.querySelectorAll('.filter-btn[data-filter="vcp"],.filter-btn[data-filter="sanxian"]').forEach(b=>b.classList.remove('active'));
-          activeFilters.type = was ? 'all' : f;
+
+        if (group === 'type') {
+          // 類型：多選 toggle
+          btn.classList.toggle('active');
+          if (btn.classList.contains('active')) {
+            activeFilters.types.add(f);
+          } else {
+            activeFilters.types.delete(f);
+          }
         }
-        if (f === 'all') { activeFilters = {market:'all',type:'all'}; document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active')); }
-        btn.classList.toggle('active', !btn.classList.contains('active') || f === 'all');
-        if (activeFilters.market === 'all' && activeFilters.type === 'all') {
-          document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
-          document.querySelector('.filter-btn[data-filter="all"]').classList.add('active');
-        }
+
         triggerCurrentSearch();
       });
     });
