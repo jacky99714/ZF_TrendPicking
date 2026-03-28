@@ -880,7 +880,12 @@
       }
       const filtered = entries.filter(e => {
         if (activeFilters.market !== 'all' && e.market !== activeFilters.market) return false;
-        if (activeFilters.type !== 'all' && e.type !== activeFilters.type) return false;
+        if (activeFilters.types.size > 0) {
+          const match = (activeFilters.types.has('strong') && e.type === 'vcp' && e.is_strong)
+            || (activeFilters.types.has('newhigh') && e.type === 'vcp' && e.is_new_high)
+            || (activeFilters.types.has('sanxian') && e.type === 'sanxian');
+          if (!match) return false;
+        }
         return true;
       });
       if (filtered.length === 0) {
