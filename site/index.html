@@ -650,7 +650,12 @@
           if (INDEX.months.length > 1) loadMonth(INDEX.months[1]);
         }
         updateDateUI();
-        showEmptyState();
+        // 預設日期模式：自動查詢最新日期
+        if (currentMode === 'date' && ALL_DATES.length > 0) {
+          searchByDate(ALL_DATES[0]);
+        } else {
+          showEmptyState();
+        }
       } catch (err) {
         document.getElementById('content').innerHTML =
           `<div class="empty-state"><div class="icon">&#9888;</div><p>載入失敗: ${err.message}</p></div>`;
