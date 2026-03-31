@@ -32,6 +32,15 @@ def _safe_val(val):
     return str(val)
 
 
+def _safe_str(val, default="-"):
+    """安全格式化字串（處理 NaN/None，NaN 是 truthy 不能用 or）"""
+    if val is None:
+        return default
+    if isinstance(val, float) and pd.isna(val):
+        return default
+    return str(val) if val else default
+
+
 class USGoogleSheetExporter:
     """
     美股 Google Sheet 匯出器
@@ -143,8 +152,8 @@ class USGoogleSheetExporter:
                     row.get("stock_id", ""),
                     row.get("stock_name", ""),
                     row.get("company_name", row.get("stock_name", "")),
-                    row.get("sector", row.get("industry_category", "-")) or "-",
-                    row.get("industry", row.get("industry_category2", "-")) or "-",
+                    _safe_str(row.get("sector", row.get("industry_category"))),
+                    _safe_str(row.get("industry", row.get("industry_category2"))),
                     "-",
                 ]
                 for row in sorted_data
@@ -352,8 +361,8 @@ class USGoogleSheetExporter:
                     row.get("stock_id", ""),
                     row.get("stock_name", ""),
                     row.get("company_name", row.get("stock_name", "")),
-                    row.get("sector", row.get("industry_category", "-")) or "-",
-                    row.get("industry", row.get("industry_category2", "-")) or "-",
+                    _safe_str(row.get("sector", row.get("industry_category"))),
+                    _safe_str(row.get("industry", row.get("industry_category2"))),
                     "-",
                     safe_return(row.get("return_20d")),
                     "O" if row.get("is_strong") else "",
@@ -479,8 +488,8 @@ class USGoogleSheetExporter:
                     row.get("stock_id", ""),
                     row.get("stock_name", ""),
                     row.get("company_name", row.get("stock_name", "")),
-                    row.get("sector", row.get("industry_category", "-")) or "-",
-                    row.get("industry", row.get("industry_category2", "-")) or "-",
+                    _safe_str(row.get("sector", row.get("industry_category"))),
+                    _safe_str(row.get("industry", row.get("industry_category2"))),
                     "-",
                     safe_price(row.get("today_price")),
                     safe_price(row.get("second_high_55d")),
