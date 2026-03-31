@@ -184,10 +184,16 @@ class USDailyTask:
             當日股價筆數
         """
         # 先檢查資料庫中是否已有該日期的資料
+        # 正常交易日應有 6000+ 筆，低於 5000 筆視為殘缺需重新下載
+        MIN_PRICE_COUNT = 5000
         existing_count = self.db.get_price_count_by_date(target_date)
-        if existing_count > 0:
+        if existing_count >= MIN_PRICE_COUNT:
             logger.info(f"資料庫中已有 {target_date} 的股價資料 ({existing_count} 筆)，跳過下載")
             return existing_count
+        if existing_count > 0:
+            logger.warning(
+                f"資料庫中 {target_date} 的股價資料不完整 ({existing_count} 筆 < {MIN_PRICE_COUNT})，重新下載"
+            )
 
         logger.info("取得美股當日股價...")
 
