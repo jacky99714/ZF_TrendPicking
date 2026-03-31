@@ -365,7 +365,7 @@ class GoogleSheetExporter:
                     return "-"
                 return f"{val * 100:.2f}%"
 
-            # SPEC: 資料排序依 "近20日股價漲幅" 降冪排序
+            # SPEC: 資料排序依 "顏色（新股優先）+ 近20日股價漲幅" 降冪排序
             def sort_key_return(row):
                 """排序用：處理 None、NaN、inf"""
                 val = row.get("return_20d")
@@ -373,7 +373,15 @@ class GoogleSheetExporter:
                     return float("-inf")
                 return val
 
-            sorted_data = sorted(data, key=sort_key_return, reverse=True)
+            def sort_key_color_then_return(row):
+                """先按顏色排序（新股=0在前, 舊股=1在後），再按漲幅降冪"""
+                is_old = 1 if (prev_stock_ids and row.get("stock_id", "") in prev_stock_ids) else 0
+                return (is_old, -sort_key_return(row))
+
+            if prev_stock_ids is not None:
+                sorted_data = sorted(data, key=sort_key_color_then_return)
+            else:
+                sorted_data = sorted(data, key=sort_key_return, reverse=True)
 
             rows = [headers] + [
                 [
@@ -493,7 +501,7 @@ class GoogleSheetExporter:
                     return "-"
                 return f"{val * 100:.2f}%"
 
-            # SPEC: 資料排序依 "差距比例" 降冪排序
+            # SPEC: 資料排序依 "顏色（新股優先）+ 差距比例" 降冪排序
             def sort_key_gap(row):
                 """排序用：處理 None 和 NaN"""
                 val = row.get("gap_ratio")
@@ -501,7 +509,15 @@ class GoogleSheetExporter:
                     return float("-inf")
                 return val
 
-            sorted_data = sorted(data, key=sort_key_gap, reverse=True)
+            def sort_key_color_then_gap(row):
+                """先按顏色排序（新股=0在前, 舊股=1在後），再按差距比例降冪"""
+                is_old = 1 if (prev_stock_ids and row.get("stock_id", "") in prev_stock_ids) else 0
+                return (is_old, -sort_key_gap(row))
+
+            if prev_stock_ids is not None:
+                sorted_data = sorted(data, key=sort_key_color_then_gap)
+            else:
+                sorted_data = sorted(data, key=sort_key_gap, reverse=True)
 
             rows = [headers] + [
                 [

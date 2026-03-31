@@ -337,7 +337,15 @@ class USGoogleSheetExporter:
                     return float("-inf")
                 return val
 
-            sorted_data = sorted(data, key=sort_key_return, reverse=True)
+            def sort_key_color_then_return(row):
+                """先按顏色排序（新股=0在前, 舊股=1在後），再按漲幅降冪"""
+                is_old = 1 if (prev_stock_ids and row.get("stock_id", "") in prev_stock_ids) else 0
+                return (is_old, -sort_key_return(row))
+
+            if prev_stock_ids is not None:
+                sorted_data = sorted(data, key=sort_key_color_then_return)
+            else:
+                sorted_data = sorted(data, key=sort_key_return, reverse=True)
 
             rows = [headers] + [
                 [
@@ -456,7 +464,15 @@ class USGoogleSheetExporter:
                     return float("-inf")
                 return val
 
-            sorted_data = sorted(data, key=sort_key_gap, reverse=True)
+            def sort_key_color_then_gap(row):
+                """先按顏色排序（新股=0在前, 舊股=1在後），再按差距比例降冪"""
+                is_old = 1 if (prev_stock_ids and row.get("stock_id", "") in prev_stock_ids) else 0
+                return (is_old, -sort_key_gap(row))
+
+            if prev_stock_ids is not None:
+                sorted_data = sorted(data, key=sort_key_color_then_gap)
+            else:
+                sorted_data = sorted(data, key=sort_key_gap, reverse=True)
 
             rows = [headers] + [
                 [
