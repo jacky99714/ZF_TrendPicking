@@ -137,6 +137,60 @@ US_SHEET_ID_VERIFICATION=<美股驗證 Sheet ID>
 
 ---
 
+## Google Sheet 匯出邏輯
+
+### 排序規則
+Sheet 匯出時先依**顏色**排序（新股在前、舊股在後），再在每組內依原始指標排序：
+- **VCP**：新股（白色）按近 20 日漲幅降冪 → 舊股（灰色）按近 20 日漲幅降冪
+- **三線開花**：新股按差距比例降冪 → 舊股按差距比例降冪
+
+若無前一交易日資料（`prev_stock_ids` 為 None），則退回純指標排序。
+
+### 新/舊股票判定
+- 與前一交易日**同類型**的篩選結果比較（VCP 比 VCP、三線比三線）
+- 新股：白色背景（不在前一天結果中）
+- 舊股：淺灰背景（在前一天結果中）
+
+### 安全值處理
+- 數值欄位：`_safe_val()` 處理 NaN/inf → 空字串
+- 字串欄位（美股 sector/industry）：`_safe_str()` 處理 NaN → `"-"`
+  - **注意**：NaN 在 Python 中是 truthy，`nan or "-"` 會回傳 nan，不能用 `or` 判斷
+
+---
+
+## GitHub Actions CI/CD
+
+### Workflow 列表
+
+| Workflow | 觸發時機 | 說明 |
+|----------|---------|------|
+| `daily.yml` | 週一~五 UTC 09:45 / 手動 | 台股每日篩選 + Sheet 匯出 + DB 備份 |
+| `us-daily.yml` | 週一~五 UTC 21:30 / 手動 | 美股每日篩選 + Sheet 匯出 + DB 備份 |
+| `monthly.yml` | 手動 | 台股每月公司主檔更新 |
+| `us-monthly.yml` | 手動 | 美股每月公司主檔更新 |
+| `deploy-site.yml` | 每日篩選後自動 / 手動 | 前端靜態網站部署到 GitHub Pages |
+| `export-stock.yml` | 手動 | 匯出股票資料 |
+
+### 手動觸發
+```bash
+# 台股指定日期（force 忽略假日檢查）
+gh workflow run daily.yml --field target_date=2026-03-28 --field force=true
+
+# 美股指定日期
+gh workflow run us-daily.yml --field target_date=2026-03-28 --field force=true
+```
+
+### DB 備份機制
+- 台股 DB 備份到 Release `db-backup`（`zf_trend_full.db.gz`）
+- 美股 DB 備份到 Release `us-db-backup`（`zf_trend_us.db.gz`）
+- 每次 daily task 完成後自動壓縮上傳，下次 run 自動下載還原
+- **重要**：不可同時平行跑多個相同市場的 workflow，否則 DB 備份會互相覆蓋
+
+### 美股股價完整性保護
+`tasks/us_daily_task.py` 中，當天股價筆數低於 5,000 筆時視為不完整，會強制重新下載（正常交易日約 6,400~6,800 筆）。避免殘缺 DB 被錯誤跳過。
+
+---
+
 ## 美股新增檔案（14 個）
 
 | 檔案 | 用途 |
@@ -165,3 +219,5 @@ US_SHEET_ID_VERIFICATION=<美股驗證 Sheet ID>
 3. **資料來源**：台股使用 FinMind + yfinance 備援，美股使用 yfinance
 4. **前端部署**：每日篩選完成後自動觸發 `Deploy Site` workflow，也可手動觸發
 5. **新/舊標記**：前端跨類型比較（VCP+三線合併），Google Sheet 同類型獨立比較
+6. **不可平行跑同市場 workflow**：多個 run 會搶同一個 Release DB 備份，導致資料互相覆蓋。補跑多天時必須逐個等完成再觸發下一個
+7. **美股 NaN 安全**：美股的 sector/industry 可能為 NaN（來自 yfinance），所有字串欄位需用 `_safe_str()` 處理，不可用 `or` 判斷
