@@ -62,7 +62,7 @@ plot(ma200, "MA200", color=color.new(color.red, 0),    linewidth=2)
 // ──────────────────────────────────────────────
 plotshape(is_vcp_strong, title="VCP 強勢信號",
      style=shape.triangleup, location=location.belowbar,
-     color=color.new(color.green, 0), size=size.small, text="強")
+     color=color.new(color.green, 0), size=size.small)
 
 // ──────────────────────────────────────────────
 // 繪圖：背景色

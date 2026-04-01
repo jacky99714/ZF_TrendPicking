@@ -64,7 +64,7 @@ fill(p_upper, p_lower, color=color.new(color.yellow, 92), title="新高容差區
 // ──────────────────────────────────────────────
 plotshape(is_vcp_newhigh, title="VCP 新高信號",
      style=shape.diamond, location=location.abovebar,
-     color=color.new(color.yellow, 0), size=size.small, text="高")
+     color=color.new(color.yellow, 0), size=size.small)
 
 // ──────────────────────────────────────────────
 // 繪圖：背景色

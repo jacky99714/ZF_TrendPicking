@@ -73,8 +73,8 @@ plot(high_55d, "55日高點", color=color.new(color.gray, 50),
 // 繪圖：信號標記
 // ──────────────────────────────────────────────
 plotshape(is_sanxian, title="三線開花信號",
-     style=shape.triangleup, location=location.belowbar,
-     color=color.new(#2979FF, 0), size=size.small, text="花")
+     style=shape.circle, location=location.belowbar,
+     color=color.new(#2979FF, 0), size=size.tiny)
 
 // ──────────────────────────────────────────────
 // 繪圖：背景色
