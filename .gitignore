@@ -4,6 +4,21 @@ credentials.json
 
 # 資料庫
 data/*.db
+data/*.db-wal
+data/*.db-shm
+data/*.db.gz
+data/.fuse_hidden*
+
+# 前端產生的資料（由 deploy workflow 產生）
+site/data/filter_results.json
+site/data/index.json
+site/data/months/
+site/data/indicators/
+
+# 本地工作檔
+reports/
+tasks/todo.md
+tmp/
 
 # Python
 __pycache__/
