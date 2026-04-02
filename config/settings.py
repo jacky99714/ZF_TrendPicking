@@ -63,7 +63,7 @@ VCP_PARAMS = {
     "ma150_period": 150,
     "ma200_period": 200,
     "lookback_20d": 20,
-    "lookback_52w": 252,    # 52週約252個交易日
+    "lookback_52w": 260,    # 52週 = 52×5 個交易日
     "new_high_tolerance": 0.01,  # 1% 容差
 }
 
