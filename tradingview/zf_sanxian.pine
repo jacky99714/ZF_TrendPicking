@@ -5,12 +5,18 @@
 indicator("ZF 三線開花", overlay=true, max_bars_back=500)
 
 // ──────────────────────────────────────────────
-// 參數設定
+// Timeframe 自動轉換（支援所有週期）
 // ──────────────────────────────────────────────
-ma8_len  = input.int(8,  "MA8 週期",  minval=3)
-ma21_len = input.int(21, "MA21 週期", minval=10)
-ma55_len = input.int(55, "MA55 週期", minval=20)
-high_len = input.int(55, "收盤新高天數", minval=20)
+tf_mult = timeframe.ismonthly ? 21 * timeframe.multiplier : timeframe.isweekly ? 5 * timeframe.multiplier : timeframe.isdaily ? timeframe.multiplier : 1
+tf_adj(int days) => math.max(1, math.ceil(days / tf_mult))
+
+// ──────────────────────────────────────────────
+// 參數設定（以日線為基準，自動適配週/月線）
+// ──────────────────────────────────────────────
+ma8_len  = tf_adj(input.int(8,  "MA8 週期(日)",  minval=1))
+ma21_len = tf_adj(input.int(21, "MA21 週期(日)", minval=1))
+ma55_len = tf_adj(input.int(55, "MA55 週期(日)", minval=1))
+high_len = tf_adj(input.int(55, "收盤新高(日)", minval=1))
 
 // ──────────────────────────────────────────────
 // 均線計算
@@ -73,8 +79,8 @@ plot(high_55d, "55日高點", color=color.new(color.gray, 50),
 // 繪圖：信號標記
 // ──────────────────────────────────────────────
 plotshape(is_sanxian, title="三線開花信號",
-     style=shape.circle, location=location.belowbar,
-     color=color.new(#2979FF, 0), size=size.tiny)
+     style=shape.triangleup, location=location.belowbar,
+     color=color.new(#2979FF, 0), size=size.small, text="花")
 
 // ──────────────────────────────────────────────
 // 繪圖：背景色
@@ -101,10 +107,11 @@ f_pct(val) => not na(val) ? str.tostring(val * 100, "#.##") + "%" : "N/A"
 f_price(val) => not na(val) ? str.tostring(val, "#.##") : "N/A"
 f_check(cond) => cond ? "✓" : "✗"
 
+tf_label = tf_mult == 1 ? "" : " · " + str.tostring(tf_mult) + "x調整"
 var table info = table.new(position.bottom_right, 3, 6, bgcolor=color.new(color.black, 80), border_width=1)
 
 if barstate.islast
-    table.cell(info, 0, 0, "三線開花條件", text_color=color.white, text_size=size.small)
+    table.cell(info, 0, 0, "三線開花" + tf_label, text_color=color.white, text_size=size.small)
     table.cell(info, 1, 0, "", text_color=color.white, text_size=size.small)
     table.cell(info, 2, 0, is_sanxian ? "✓ 通過" : "✗ 未通過",
          text_color=is_sanxian ? color.lime : color.red, text_size=size.small)

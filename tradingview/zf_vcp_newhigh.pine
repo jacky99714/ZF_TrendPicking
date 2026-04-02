@@ -5,12 +5,18 @@
 indicator("ZF VCP 新高", overlay=true, max_bars_back=500)
 
 // ──────────────────────────────────────────────
-// 參數設定
+// Timeframe 自動轉換（支援所有週期）
 // ──────────────────────────────────────────────
-high5_len    = input.int(5,   "近期高點天數",   minval=1)
-high52w_len  = input.int(252, "52週高點天數",   minval=100)
+tf_mult = timeframe.ismonthly ? 21 * timeframe.multiplier : timeframe.isweekly ? 5 * timeframe.multiplier : timeframe.isdaily ? timeframe.multiplier : 1
+tf_adj(int days) => math.max(1, math.ceil(days / tf_mult))
+
+// ──────────────────────────────────────────────
+// 參數設定（以日線為基準，自動適配週/月線）
+// ──────────────────────────────────────────────
+high5_len    = tf_adj(input.int(5,   "近期高點(日)",   minval=1))
+high52w_len  = tf_adj(input.int(260, "52週高點(日)",   minval=1))
 tolerance    = input.float(0.10, "新高容差", minval=0.01, maxval=0.50, step=0.01)
-return_lookback = input.int(20, "報酬率回看天數", minval=5)
+return_lookback = tf_adj(input.int(20, "報酬率回看(日)", minval=1))
 // 大盤指數：預設自動判斷（台股=TAIEX，美股=SPX），可手動覆蓋
 is_tw = str.startswith(syminfo.prefix, "TWSE") or str.startswith(syminfo.prefix, "TPEX")
 auto_market = is_tw ? "TWSE:TAIEX" : "SP:SPX"
@@ -64,7 +70,7 @@ fill(p_upper, p_lower, color=color.new(color.yellow, 92), title="新高容差區
 // ──────────────────────────────────────────────
 plotshape(is_vcp_newhigh, title="VCP 新高信號",
      style=shape.diamond, location=location.abovebar,
-     color=color.new(color.yellow, 0), size=size.small)
+     color=color.new(color.yellow, 0), size=size.small, text="高")
 
 // ──────────────────────────────────────────────
 // 繪圖：背景色
@@ -92,10 +98,11 @@ f_price(val) => str.tostring(val, "#.##")
 f_check(cond) => cond ? "✓" : "✗"
 
 market_label = use_custom_market ? custom_market : (is_tw ? "台股 TAIEX" : "美股 S&P500")
+tf_label = tf_mult == 1 ? "" : " · " + str.tostring(tf_mult) + "x調整"
 var table info = table.new(position.middle_right, 3, 5, bgcolor=color.new(color.black, 80), border_width=1)
 
 if barstate.islast
-    table.cell(info, 0, 0, "VCP 新高 (" + market_label + ")", text_color=color.white, text_size=size.small)
+    table.cell(info, 0, 0, "VCP 新高 (" + market_label + tf_label + ")", text_color=color.white, text_size=size.small)
     table.cell(info, 1, 0, "", text_color=color.white, text_size=size.small)
     table.cell(info, 2, 0, is_vcp_newhigh ? "✓ 通過" : "✗ 未通過",
          text_color=is_vcp_newhigh ? color.lime : color.red, text_size=size.small)

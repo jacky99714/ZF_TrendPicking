@@ -5,13 +5,21 @@
 indicator("ZF VCP 強勢", overlay=true, max_bars_back=500)
 
 // ──────────────────────────────────────────────
-// 參數設定
+// Timeframe 自動轉換（支援所有週期）
 // ──────────────────────────────────────────────
-ma50_len  = input.int(50,  "MA50 週期",  minval=10)
-ma150_len = input.int(150, "MA150 週期", minval=50)
-ma200_len = input.int(200, "MA200 週期", minval=100)
-slope_lookback = input.int(20, "MA200 斜率回看天數", minval=5)
-return_lookback = input.int(20, "報酬率回看天數", minval=5)
+// 每根 K 棒 = 幾個交易日？（用交易日，非日曆天）
+// 日內=1, 1D=1, 2D=2, W=5, 2W=10, M=21, 3M=63
+tf_mult = timeframe.ismonthly ? 21 * timeframe.multiplier : timeframe.isweekly ? 5 * timeframe.multiplier : timeframe.isdaily ? timeframe.multiplier : 1
+tf_adj(int days) => math.max(1, math.ceil(days / tf_mult))
+
+// ──────────────────────────────────────────────
+// 參數設定（以日線為基準，自動適配週/月線）
+// ──────────────────────────────────────────────
+ma50_len  = tf_adj(input.int(50,  "MA50 週期(日)",  minval=1))
+ma150_len = tf_adj(input.int(150, "MA150 週期(日)", minval=1))
+ma200_len = tf_adj(input.int(200, "MA200 週期(日)", minval=1))
+slope_lookback = tf_adj(input.int(20, "MA200 斜率回看(日)", minval=1))
+return_lookback = tf_adj(input.int(20, "報酬率回看(日)", minval=1))
 // 大盤指數：預設自動判斷（台股=TAIEX，美股=SPX），可手動覆蓋
 is_tw = str.startswith(syminfo.prefix, "TWSE") or str.startswith(syminfo.prefix, "TPEX")
 auto_market = is_tw ? "TWSE:TAIEX" : "SP:SPX"
@@ -62,7 +70,7 @@ plot(ma200, "MA200", color=color.new(color.red, 0),    linewidth=2)
 // ──────────────────────────────────────────────
 plotshape(is_vcp_strong, title="VCP 強勢信號",
      style=shape.triangleup, location=location.belowbar,
-     color=color.new(color.green, 0), size=size.small)
+     color=color.new(color.green, 0), size=size.small, text="強")
 
 // ──────────────────────────────────────────────
 // 繪圖：背景色
@@ -92,10 +100,11 @@ f_price(val) => str.tostring(val, "#.##")
 f_check(cond) => cond ? "✓" : "✗"
 
 market_label = use_custom_market ? custom_market : (is_tw ? "台股 TAIEX" : "美股 S&P500")
+tf_label = tf_mult == 1 ? "" : " · " + str.tostring(tf_mult) + "x調整"
 var table info = table.new(position.top_right, 3, 6, bgcolor=color.new(color.black, 80), border_width=1)
 
 if barstate.islast
-    table.cell(info, 0, 0, "VCP 強勢 (" + market_label + ")", text_color=color.white, text_size=size.small)
+    table.cell(info, 0, 0, "VCP 強勢 (" + market_label + tf_label + ")", text_color=color.white, text_size=size.small)
     table.cell(info, 1, 0, "", text_color=color.white, text_size=size.small)
     table.cell(info, 2, 0, is_vcp_strong ? "✓ 通過" : "✗ 未通過",
          text_color=is_vcp_strong ? color.lime : color.red, text_size=size.small)
