@@ -91,7 +91,7 @@ def _extract_vcp_indicators(row, market_return: float) -> str:
         "return_20d": safe_round(row.get("return_20d"), 4),
         "market_return": safe_round(market_return, 4),
         "high_5d": safe_round(row.get("high_5d")),
-        "high_252d": safe_round(row.get("high_252d")),
+        "high_260d": safe_round(row.get("high_260d")),
     }
     return json.dumps(indicators, ensure_ascii=False)
 
@@ -172,9 +172,9 @@ def run_filters_for_date(
         beat_market = vcp_today["return_20d"].fillna(-float("inf")) > market_return
 
         high_5d = vcp_today["high_5d"].fillna(0)
-        high_252d = vcp_today["high_252d"].fillna(1).replace(0, 1)
-        gap = abs(high_5d / high_252d - 1)
-        new_high_mask = (gap <= new_high_tolerance) & (high_252d > 0)
+        high_260d = vcp_today["high_260d"].fillna(1).replace(0, 1)
+        gap = abs(high_5d / high_260d - 1)
+        new_high_mask = (gap <= new_high_tolerance) & (high_260d > 0)
 
         vcp_today = vcp_today.copy()
         vcp_today.loc[:, "is_strong"] = strong_mask & beat_market

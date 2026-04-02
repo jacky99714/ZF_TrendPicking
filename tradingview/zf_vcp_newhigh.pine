@@ -28,14 +28,14 @@ effective_market = use_custom_market ? custom_market : auto_market
 // 高低點計算
 // ──────────────────────────────────────────────
 high_5d  = ta.highest(high, high5_len)
-high_252d = ta.highest(high, high52w_len)
+high_260d = ta.highest(high, high52w_len)
 
 // ──────────────────────────────────────────────
 // 條件 1：接近 52 週新高（容差內）
-// |high_5d / high_252d - 1| <= tolerance
+// |high_5d / high_260d - 1| <= tolerance
 // ──────────────────────────────────────────────
-gap_pct = math.abs(high_5d / high_252d - 1)
-cond_near_high = not na(high_252d) and gap_pct <= tolerance
+gap_pct = math.abs(high_5d / high_260d - 1)
+cond_near_high = not na(high_260d) and gap_pct <= tolerance
 
 // ──────────────────────────────────────────────
 // 條件 2：20日報酬率 > 大盤20日報酬率
@@ -53,14 +53,14 @@ is_vcp_newhigh = cond_near_high and cond_beat_market
 // ──────────────────────────────────────────────
 // 繪圖：52 週高點線
 // ──────────────────────────────────────────────
-plot(high_252d, "52週高點", color=color.new(color.orange, 30),
+plot(high_260d, "52週高點", color=color.new(color.orange, 30),
      linewidth=2, style=plot.style_stepline)
 
 // ──────────────────────────────────────────────
 // 繪圖：容差區間
 // ──────────────────────────────────────────────
-upper_band = high_252d * (1 + tolerance)
-lower_band = high_252d * (1 - tolerance)
+upper_band = high_260d * (1 + tolerance)
+lower_band = high_260d * (1 - tolerance)
 p_upper = plot(upper_band, "容差上限", color=color.new(color.yellow, 70), linewidth=1, style=plot.style_stepline)
 p_lower = plot(lower_band, "容差下限", color=color.new(color.yellow, 70), linewidth=1, style=plot.style_stepline)
 fill(p_upper, p_lower, color=color.new(color.yellow, 92), title="新高容差區間")
@@ -84,7 +84,7 @@ plot(is_vcp_newhigh ? 1 : 0,  "★ VCP新高=通過",    display=display.data_wi
 plot(cond_near_high ? 1 : 0,  "① 接近52週高",      display=display.data_window)
 plot(cond_beat_market ? 1 : 0,"② 打敗大盤",        display=display.data_window)
 plot(high_5d,                  "  5日最高",          display=display.data_window)
-plot(high_252d,                "  52週最高",         display=display.data_window)
+plot(high_260d,                "  52週最高",         display=display.data_window)
 plot(gap_pct * 100,            "  差距%",            display=display.data_window)
 plot(tolerance * 100,          "  容差%",            display=display.data_window)
 plot(stock_return * 100,       "  個股報酬%",        display=display.data_window)
@@ -108,7 +108,7 @@ if barstate.islast
          text_color=is_vcp_newhigh ? color.lime : color.red, text_size=size.small)
 
     table.cell(info, 0, 1, "① 接近52週高", text_color=color.gray, text_size=size.tiny)
-    table.cell(info, 1, 1, "5日高:" + f_price(high_5d) + " / 52週高:" + f_price(high_252d),
+    table.cell(info, 1, 1, "5日高:" + f_price(high_5d) + " / 52週高:" + f_price(high_260d),
          text_color=color.gray, text_size=size.tiny)
     table.cell(info, 2, 1, f_check(cond_near_high),
          text_color=cond_near_high ? color.lime : color.red, text_size=size.tiny)

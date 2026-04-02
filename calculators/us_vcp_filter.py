@@ -175,7 +175,7 @@ class USVCPFilter:
         """
         # 計算 5 日高點與 52 週高點的差距（處理 NaN 和除以零）
         high_5d = df["high_5d"].fillna(0)
-        high_52w = df["high_252d"].fillna(1)  # 避免除以零
+        high_52w = df["high_260d"].fillna(1)  # 避免除以零
 
         # 安全除法
         high_52w_safe = high_52w.replace(0, 1)

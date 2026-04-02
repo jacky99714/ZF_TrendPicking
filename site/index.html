@@ -1036,10 +1036,11 @@
           <span class="t-label">20日漲幅</span> <span class="t-val">${fmtPct(ind.return_20d)}</span> &gt; 大盤 <span class="t-val">${fmtPct(ind.market_return)}</span>
         </span>`;
       } else if (type === 'vh') {
-        const gap = (ind.high_5d && ind.high_252d) ? Math.abs(ind.high_5d / ind.high_252d - 1) : null;
+        const high52w = ind.high_260d || ind.high_252d;
+        const gap = (ind.high_5d && high52w) ? Math.abs(ind.high_5d / high52w - 1) : null;
         return `<span class="tooltip">
           <span class="t-label">5日高點</span> <span class="t-val">${fmtVal(ind.high_5d)}</span><br>
-          <span class="t-label">52週高點</span> <span class="t-val">${fmtVal(ind.high_252d)}</span><br>
+          <span class="t-label">52週高點</span> <span class="t-val">${fmtVal(high52w)}</span><br>
           <span class="t-label">差距</span> <span class="t-val">${gap != null ? (gap*100).toFixed(2)+'%' : '-'}</span><br>
           <span class="t-label">20日漲幅</span> <span class="t-val">${fmtPct(ind.return_20d)}</span> &gt; 大盤 <span class="t-val">${fmtPct(ind.market_return)}</span>
         </span>`;

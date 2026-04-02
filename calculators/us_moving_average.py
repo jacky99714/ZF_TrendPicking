@@ -296,7 +296,7 @@ class USMovingAverageCalculator:
         df = cls.calculate_returns(df, [20])
 
         # 計算 5 日高點和 52 週高點
-        df = cls.calculate_high_low(df, [5, 252])
+        df = cls.calculate_high_low(df, [5, 260])
 
         logger.info("美股 VCP 計算資料準備完成")
         return df

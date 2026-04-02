@@ -77,7 +77,7 @@ def export_single_stock(stock_id: str):
         "open_price", "high_price", "low_price", "close_price", "volume",
         "ma8", "ma21", "ma50", "ma55", "ma150", "ma200",
         "ma200_slope_20d", "return_20d",
-        "high_5d", "high_252d", "high_55d", "second_high_55d"
+        "high_5d", "high_260d", "high_55d", "second_high_55d"
     ]
 
     # 準備資料列
@@ -100,7 +100,7 @@ def export_single_stock(stock_id: str):
             safe_round(row.get("ma200_slope_20d"), 4),
             safe_round(row.get("return_20d"), 4),
             safe_round(row.get("high_5d"), 2),
-            safe_round(row.get("high_252d"), 2),
+            safe_round(row.get("high_260d"), 2),
             safe_round(row.get("high_55d"), 2),
             safe_round(row.get("second_high_55d"), 2),
         ])

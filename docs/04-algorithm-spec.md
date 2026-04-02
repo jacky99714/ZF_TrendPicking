@@ -56,7 +56,7 @@ SMA(N) = (P₁ + P₂ + ... + Pₙ) / N
 2. **計算均線**：`calculate_sma([50, 150, 200])`
 3. **計算 MA200 斜率**：`calculate_ma_slope("ma200", lookback=20)` → 欄位 `ma200_slope_20d`
 4. **計算 20 日報酬率**：`calculate_returns([20])` → 欄位 `return_20d`
-5. **計算高低點**：`calculate_high_low([5, 252])` → 欄位 `high_5d`, `high_252d`
+5. **計算高低點**：`calculate_high_low([5, 252])` → 欄位 `high_5d`, `high_260d`
 
 ### 2.2 大盤報酬計算
 
@@ -100,15 +100,15 @@ market_return = (current_taiex - past_taiex) / past_taiex
 
 ```
 條件 1（接近 52 週新高）:
-  |high_5d / high_252d - 1| ≤ new_high_tolerance
+  |high_5d / high_260d - 1| ≤ new_high_tolerance
 
   容差（new_high_tolerance）= 0.10（10%）
 
   NaN 處理：
   - high_5d NaN → 填 0（不滿足）
-  - high_252d NaN → 填 1（避免除以零）
-  - high_252d == 0 → 替換為 1（安全除法）
-  額外條件：high_252d > 0（數據有效性）
+  - high_260d NaN → 填 1（避免除以零）
+  - high_260d == 0 → 替換為 1（安全除法）
+  額外條件：high_260d > 0（數據有效性）
 
 條件 2（打敗大盤）:
   return_20d > market_return_20d

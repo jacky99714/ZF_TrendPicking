@@ -458,8 +458,8 @@ def _prepare_vcp_verification(price_df, market_return, target_date, vcp_filter):
     )
 
     high_5d = df["high_5d"].fillna(0)
-    high_252d = df["high_252d"].fillna(1).replace(0, 1)
-    df["gap_to_52w_high"] = abs(high_5d / high_252d - 1)
+    high_260d = df["high_260d"].fillna(1).replace(0, 1)
+    df["gap_to_52w_high"] = abs(high_5d / high_260d - 1)
     df["is_new_high"] = (
         df["gap_to_52w_high"] <= vcp_filter.new_high_tolerance
     ) & df["cond5"]

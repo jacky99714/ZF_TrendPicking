@@ -669,7 +669,7 @@ class USGoogleSheetExporter:
             vcp_headers = [
                 "stock_id", "date", "close_price", "high_price",
                 "ma50", "ma150", "ma200", "ma200_slope_20d",
-                "return_20d", "high_5d", "high_252d", "gap_to_52w_high",
+                "return_20d", "high_5d", "high_260d", "gap_to_52w_high",
                 "cond1_close>ma50", "cond2_ma50>ma150", "cond3_ma150>ma200",
                 "cond4_ma200_up", "cond5_beat_market",
                 "is_strong", "is_new_high", "is_vcp"
@@ -689,7 +689,7 @@ class USGoogleSheetExporter:
                         _safe_val(row.get("ma200_slope_20d")),
                         _safe_val(row.get("return_20d")),
                         _safe_val(row.get("high_5d")),
-                        _safe_val(row.get("high_252d")),
+                        _safe_val(row.get("high_260d")),
                         _safe_val(row.get("gap_to_52w_high")),
                         _safe_val(row.get("cond1")),
                         _safe_val(row.get("cond2")),
