@@ -15,7 +15,7 @@ tf_adj(int days) => math.max(1, math.ceil(days / tf_mult))
 // ──────────────────────────────────────────────
 high5_len    = tf_adj(input.int(5,   "近期高點(日)",   minval=1))
 high52w_len  = tf_adj(input.int(260, "52週高點(日)",   minval=1))
-tolerance    = input.float(0.10, "新高容差", minval=0.01, maxval=0.50, step=0.01)
+tolerance    = input.float(0.01, "新高容差", minval=0.01, maxval=0.50, step=0.01)
 return_lookback = tf_adj(input.int(20, "報酬率回看(日)", minval=1))
 // 大盤指數：預設自動判斷（台股=TAIEX，美股=SPX），可手動覆蓋
 is_tw = str.startswith(syminfo.prefix, "TWSE") or str.startswith(syminfo.prefix, "TPEX")

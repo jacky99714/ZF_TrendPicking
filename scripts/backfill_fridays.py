@@ -132,7 +132,7 @@ def calculate_market_return(market_df, target_date, lookback=20):
 
 
 def run_filters_for_date(
-    db, target_date, stock_info, new_high_tolerance=0.10
+    db, target_date, stock_info, new_high_tolerance=0.01
 ):
     """對指定日期執行篩選，同時提取指標值"""
     start_date = target_date - timedelta(days=400)

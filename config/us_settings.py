@@ -69,7 +69,7 @@ US_VCP_PARAMS = {
     "ma200_period": 200,
     "lookback_20d": 20,
     "lookback_52w": 252,    # 52週約252個交易日
-    "new_high_tolerance": 0.10,  # 10% 容差
+    "new_high_tolerance": 0.01,  # 1% 容差
 }
 
 # 三線開花篩選參數（與台股相同邏輯）

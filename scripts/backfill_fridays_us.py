@@ -126,7 +126,7 @@ def _extract_sanxian_indicators(row):
     }, ensure_ascii=False)
 
 
-def run_us_filters_for_date(db, target_date, stock_info, new_high_tolerance=0.10):
+def run_us_filters_for_date(db, target_date, stock_info, new_high_tolerance=0.01):
     start_date = target_date - timedelta(days=400)
     price_df = db.get_daily_prices(start_date, target_date)
     market_df = db.get_market_index(start_date, target_date)
