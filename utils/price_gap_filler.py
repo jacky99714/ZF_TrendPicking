@@ -59,13 +59,24 @@ def fill_price_gaps(
         f"({ref_dates[0]} ~ {ref_dates[-1]})"
     )
 
-    # 取得所有有資料的股票
-    all_stocks = [
-        r[0]
-        for r in conn.execute(
-            f"SELECT DISTINCT stock_id FROM {price_table}"
-        ).fetchall()
-    ]
+    # 只檢查 stock_info 中的正規股票（排除權證等）
+    stock_info_table = "stock_info" if "us_" not in price_table else "us_stock_info"
+    try:
+        all_stocks = [
+            r[0]
+            for r in conn.execute(
+                f"SELECT stock_id FROM {stock_info_table}"
+            ).fetchall()
+        ]
+    except Exception:
+        # fallback: 從 price_table 取
+        all_stocks = [
+            r[0]
+            for r in conn.execute(
+                f"SELECT DISTINCT stock_id FROM {price_table}"
+            ).fetchall()
+        ]
+    logger.info(f"檢查股票數: {len(all_stocks)} 檔")
 
     # 逐股檢查缺日
     stocks_with_gaps = []
