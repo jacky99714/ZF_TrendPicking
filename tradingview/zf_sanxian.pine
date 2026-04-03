@@ -79,8 +79,8 @@ plot(high_55d, "55日高點", color=color.new(color.gray, 50),
 // 繪圖：信號標記
 // ──────────────────────────────────────────────
 plotshape(is_sanxian, title="三線開花信號",
-     style=shape.triangleup, location=location.belowbar,
-     color=color.new(#2979FF, 0), size=size.small, text="花")
+     style=shape.circle, location=location.belowbar,
+     color=color.new(#2979FF, 0), size=size.tiny)
 
 // ──────────────────────────────────────────────
 // 繪圖：背景色
@@ -108,9 +108,10 @@ f_price(val) => not na(val) ? str.tostring(val, "#.##") : "N/A"
 f_check(cond) => cond ? "✓" : "✗"
 
 tf_label = tf_mult == 1 ? "" : " · " + str.tostring(tf_mult) + "x調整"
+show_panel = input.bool(false, "顯示資訊面板")
 var table info = table.new(position.bottom_right, 3, 6, bgcolor=color.new(color.black, 80), border_width=1)
 
-if barstate.islast
+if barstate.islast and show_panel
     table.cell(info, 0, 0, "三線開花" + tf_label, text_color=color.white, text_size=size.small)
     table.cell(info, 1, 0, "", text_color=color.white, text_size=size.small)
     table.cell(info, 2, 0, is_sanxian ? "✓ 通過" : "✗ 未通過",

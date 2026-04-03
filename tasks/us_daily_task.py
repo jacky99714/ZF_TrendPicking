@@ -16,6 +16,7 @@ from exporters.us_google_sheet import USGoogleSheetExporter
 from utils.us_trading_calendar import USMarketCalendar
 from utils.us_split_detector import USSplitDetector
 from utils.daily_verifier import DailyVerifier
+from utils.price_gap_filler import fill_price_gaps
 
 
 class USDailyTask:
@@ -132,7 +133,20 @@ class USDailyTask:
                 logger.warning("無美股股價資料，任務結束")
                 return result
 
-            # Step 2.5: 偵測分割並重新下載受影響股票的歷史資料
+            # Step 2.5: 補齊歷史缺漏股價（在篩選前修好）
+            try:
+                gap_filled = fill_price_gaps(
+                    db_path=self.db.db_path,
+                    price_table="us_daily_price",
+                    ref_stock="AAPL",
+                    yf_suffix="",
+                )
+                result["gap_filled"] = gap_filled
+            except Exception as e:
+                logger.warning(f"補漏失敗（不影響後續流程）: {e}")
+                result["gap_filled"] = 0
+
+            # Step 2.6: 偵測分割並重新下載受影響股票的歷史資料
             split_count = self._detect_and_refresh_splits(target_date)
             result["split_refreshed_count"] = split_count
 

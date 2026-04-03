@@ -16,6 +16,7 @@ from exporters.google_sheet import GoogleSheetExporter
 from utils.trading_calendar import TradingCalendar
 from utils.split_detector import SplitDetector
 from utils.daily_verifier import DailyVerifier
+from utils.price_gap_filler import fill_price_gaps
 
 
 class DailyTask:
@@ -131,6 +132,20 @@ class DailyTask:
                 result["errors"].append("無股價資料（可能非交易日）")
                 logger.warning("無股價資料，任務結束")
                 return result
+
+            # Step 2.5: 補齊歷史缺漏股價（在篩選前修好）
+            try:
+                gap_filled = fill_price_gaps(
+                    db_path=self.db.db_path,
+                    price_table="daily_price",
+                    ref_stock="2330",
+                    yf_suffix=".TW",
+                    yf_alt_suffix=".TWO",
+                )
+                result["gap_filled"] = gap_filled
+            except Exception as e:
+                logger.warning(f"補漏失敗（不影響後續流程）: {e}")
+                result["gap_filled"] = 0
 
             # Step 3: 減資/分割偵測
             split_count = self._detect_and_refresh_splits(target_date, stock_info)
