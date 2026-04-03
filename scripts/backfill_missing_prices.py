@@ -246,6 +246,17 @@ def main():
 
     logger.info(f"檢查股票: {len(stocks)} 檔")
 
+    # 台股：查 stock_type 決定 suffix
+    stock_types = {}
+    if market == "tw":
+        try:
+            rows = conn.execute(
+                "SELECT stock_id, stock_type FROM stock_info"
+            ).fetchall()
+            stock_types = {r[0]: r[1] for r in rows}
+        except Exception:
+            pass
+
     # 逐股檢查並補齊
     total_missing = 0
     total_filled = 0
@@ -265,10 +276,18 @@ def main():
             logger.info(f"  {stock_id}: 缺 {len(missing)} 天 → {missing_str}")
             continue
 
+        # 台股根據 stock_type 決定 suffix
+        stock_cfg = dict(cfg)
+        if stock_types:
+            st = stock_types.get(stock_id, "twse")
+            if st == "tpex":
+                stock_cfg["suffix"] = ".TWO"
+                stock_cfg["alt_suffix"] = ".TW"
+
         # 下載並寫入
         logger.info(f"  {stock_id}: 補齊 {len(missing)} 天...")
         try:
-            df = download_missing_prices(stock_id, missing, cfg)
+            df = download_missing_prices(stock_id, missing, stock_cfg)
             if df.empty:
                 logger.warning(f"  {stock_id}: yfinance 無資料")
                 failed_stocks.append((stock_id, "yfinance 無資料"))

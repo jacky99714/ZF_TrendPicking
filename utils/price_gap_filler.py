@@ -101,17 +101,40 @@ def fill_price_gaps(
         stocks_with_gaps = stocks_with_gaps[:max_stocks]
         logger.info(f"  限制最多補 {max_stocks} 檔")
 
+    # 台股：查 stock_type 決定 suffix
+    stock_types = {}
+    if yf_suffix == ".TW":
+        try:
+            rows = conn.execute(
+                "SELECT stock_id, stock_type FROM stock_info"
+            ).fetchall()
+            stock_types = {r[0]: r[1] for r in rows}
+        except Exception:
+            pass
+
     total_filled = 0
 
     for stock_id, missing_dates in stocks_with_gaps:
+        # 台股根據 stock_type 決定 suffix
+        actual_suffix = yf_suffix
+        actual_alt = yf_alt_suffix
+        if stock_types:
+            st = stock_types.get(stock_id, "twse")
+            if st == "tpex":
+                actual_suffix = ".TWO"
+                actual_alt = ".TW"
+            else:
+                actual_suffix = ".TW"
+                actual_alt = ".TWO"
+
         try:
             filled = _download_and_insert(
                 conn,
                 stock_id,
                 missing_dates,
                 price_table,
-                yf_suffix,
-                yf_alt_suffix,
+                actual_suffix,
+                actual_alt,
             )
             if filled > 0:
                 total_filled += filled
