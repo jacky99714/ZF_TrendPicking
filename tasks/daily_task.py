@@ -16,6 +16,7 @@ from exporters.google_sheet import GoogleSheetExporter
 from utils.trading_calendar import TradingCalendar
 from utils.split_detector import SplitDetector
 from utils.daily_verifier import DailyVerifier
+from utils.objective_verifier import ObjectiveVerifier
 from utils.price_gap_filler import fill_price_gaps
 
 
@@ -171,6 +172,17 @@ class DailyTask:
                 price_count, market_return,
             )
             result["verification_passed"] = verify_ok
+
+            # Step 8: 客觀驗證（獨立資料來源 + Sheet 回讀）
+            try:
+                obj_verifier = ObjectiveVerifier(db=self.db, market="tw")
+                obj_result = obj_verifier.verify_all(
+                    target_date, vcp_results, sanxian_results,
+                    market_return, self.exporter,
+                )
+                result["objective_verification"] = obj_result
+            except Exception as e:
+                logger.warning(f"客觀驗證失敗（不影響結果）: {e}")
 
             result["success"] = True
             logger.info(
