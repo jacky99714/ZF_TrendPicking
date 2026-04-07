@@ -188,18 +188,49 @@ python scripts/verify_data.py
 python scripts/verify_data.py --us
 ```
 
-### 3.7 維護腳本
+### 3.7 股價缺漏補齊
+
+```bash
+# 檢查缺漏（dry-run 模式）
+python scripts/backfill_missing_prices.py --tw --dry-run
+python scripts/backfill_missing_prices.py --dry-run
+
+# 正式補齊（台股 / 美股）
+python scripts/backfill_missing_prices.py --tw --all
+python scripts/backfill_missing_prices.py --all
+
+# 指定股票
+python scripts/backfill_missing_prices.py --tw --stock 7792
+```
+
+> 每日排程已自動執行補漏（daily_task Step 2.5），通常不需要手動跑。
+
+### 3.8 資料完整性驗證
+
+```bash
+# 驗證篩選通過的股票
+python scripts/verify_stock_gaps.py --tw
+python scripts/verify_stock_gaps.py
+
+# 驗證全部股票
+python scripts/verify_stock_gaps.py --tw --all
+python scripts/verify_stock_gaps.py --all
+
+# 指定股票
+python scripts/verify_stock_gaps.py --stock 2330
+```
+
+> 注意：檢查資料必須從 GitHub Release 下載線上 DB，本機 DB 不會每天更新。
+
+### 3.9 其他維護腳本
 
 ```bash
 # 匯出單一股票驗證資料
 python scripts/export_single_stock.py
 
-# 修復零價異常（預覽 / 實際執行）
-python scripts/fix_zero_prices_in_db.py --preview
-python scripts/fix_zero_prices_in_db.py --fix
-
-# 重建台股價格資料
-python scripts/rebuild_price_data.py
+# 修復缺失的 indicator_json
+python scripts/fix_missing_indicators.py
+python scripts/fix_missing_indicators.py --us
 ```
 
 ---
@@ -227,15 +258,22 @@ python scripts/rebuild_price_data.py
 ```
 1. Checkout repository
 2. Set up Python 3.11 (pip cache)
-3. Install dependencies (pip install -r requirements.txt)
+3. Install dependencies
 4. Download database from Release (gzip 壓縮檔)
-   └── 備援: Download from Artifact (台股 daily/monthly)
 5. Set up Google credentials (from Secret)
 6. Initialize if needed (首次執行)
-7. Run task (daily / monthly)
+7. Run daily task:
+   Step 1:   確保股票清單
+   Step 2:   下載今日股價
+   Step 2.5: 自動補漏歷史缺口（price_gap_filler）
+   Step 3:   減資/分割偵測
+   Step 4:   大盤指數下載
+   Step 5:   篩選（VCP + 三線開花）
+   Step 6:   匯出 Google Sheet
+   Step 7:   每日自動驗證
 8. Backup database to Release (gzip 壓縮，--clobber 覆蓋)
-   └── 額外: Upload Artifact (台股 daily/monthly，90天有效)
 9. Upload logs (always，30天有效)
+10. Trigger deploy-site workflow（部署前端）
 ```
 
 ### 4.3 GitHub Secrets 設定

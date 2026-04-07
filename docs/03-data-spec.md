@@ -64,9 +64,16 @@
 | today_price | Numeric(12,4) | nullable | 今日股價（三線開花用） |
 | second_high_55d | Numeric(12,4) | nullable | 55日次高價（三線開花用） |
 | gap_ratio | Numeric(8,4) | nullable | 差距比例（三線開花用） |
+| indicator_json | Text | nullable | 完整指標 JSON（含 MA、高低點、報酬率等，供前端 tooltip 顯示） |
 | created_at | DateTime | server_default=now() | 建立時間 |
 
 **索引**：`INDEX(filter_date, filter_type)` — 依日期+類型快速查詢
+
+**indicator_json 內容範例**（VCP）：
+```json
+{"ma50": 95.2, "ma150": 90.1, "ma200": 88.5, "ma200_slope_20d": 0.015,
+ "return_20d": 0.065, "high_5d": 97.0, "high_260d": 99.1}
+```
 
 ---
 
@@ -134,6 +141,7 @@
 | today_price | Numeric(12,4) | nullable | 今日股價（三線開花用） |
 | second_high_55d | Numeric(12,4) | nullable | 55日次高價（三線開花用） |
 | gap_ratio | Numeric(8,4) | nullable | 差距比例（三線開花用） |
+| indicator_json | Text | nullable | 完整指標 JSON（同台股） |
 | created_at | DateTime | server_default=now() | 建立時間 |
 
 **索引**：`INDEX(filter_date, filter_type)`
@@ -265,7 +273,9 @@ PRAGMA synchronous = NORMAL;  -- 平衡安全性與效能
 | H | 強勢清單 | is_strong_list | `O` 或空白 |
 | I | 新高清單 | is_new_high_list | `O` 或空白 |
 
-**排序**：依「近20日股價漲幅」降冪排序
+**排序**：新股優先（白色背景）→ 舊股（灰色背景），每組內依「近20日股價漲幅」降冪排序
+
+**新/舊股判定**：與前一交易日同類型（VCP 比 VCP）的篩選結果比較
 
 ### 3.4 三線開花篩選結果
 

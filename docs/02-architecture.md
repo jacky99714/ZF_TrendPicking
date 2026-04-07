@@ -67,7 +67,10 @@
 │                   工具層                          │
 │   utils/trading_calendar.py                      │
 │   utils/us_trading_calendar.py                   │
+│   utils/split_detector.py                        │
 │   utils/us_split_detector.py                     │
+│   utils/price_gap_filler.py                      │
+│   utils/daily_verifier.py                        │
 │   utils/performance.py                           │
 ├─────────────────────────────────────────────────┤
 │                   設定層                          │
@@ -146,8 +149,8 @@ get_stock_price() 呼叫
 
 | 檔案 | 類別 | 職責 |
 |------|------|------|
-| `tasks/daily_task.py` | `DailyTask` | 台股每日任務：抓股價 → 抓大盤 → VCP 篩選 → 三線開花篩選 → 匯出 Sheet |
-| `tasks/us_daily_task.py` | `USDailyTask` | 美股每日任務：抓股價 → **分割偵測** → VCP 篩選 → 三線開花篩選 → 匯出 Sheet |
+| `tasks/daily_task.py` | `DailyTask` | 台股每日任務：抓股價 → **補漏** → 減資偵測 → 抓大盤 → 篩選 → 匯出 Sheet → 驗證 |
+| `tasks/us_daily_task.py` | `USDailyTask` | 美股每日任務：抓股價 → **補漏** → **分割偵測** → 抓大盤 → 篩選 → 匯出 Sheet → 驗證 |
 | `tasks/monthly_task.py` | `MonthlyTask` | 台股每月任務：更新股票清單 → 匯出主檔 Sheet |
 | `tasks/us_monthly_task.py` | `USMonthlyTask` | 美股每月任務：更新股票清單 → 補充 sector/industry → 匯出主檔 Sheet |
 
@@ -164,7 +167,10 @@ get_stock_price() 呼叫
 |------|------|------|
 | `utils/trading_calendar.py` | `TradingCalendar` | 台股交易日曆（2024-2026 國定假日），判斷交易日、取得前/後交易日 |
 | `utils/us_trading_calendar.py` | `USMarketCalendar` | 美股交易日曆（2024-2026 聯邦假日+提前收盤日） |
+| `utils/split_detector.py` | `SplitDetector` | 台股除權息偵測：用 FinMind 還原價比對 DB 前日價格 |
 | `utils/us_split_detector.py` | `USSplitDetector` | 美股分割/合股偵測：比對 DB 與 yfinance 歷史價格，自動標記需重新下載的股票 |
+| `utils/price_gap_filler.py` | `fill_price_gaps()` | 股價缺漏自動補齊：用基準股票建交易日曆，逐股比對並從 yfinance 下載缺日 |
+| `utils/daily_verifier.py` | `DailyVerifier` | 每日自動驗證：檢查股價筆數、篩選結果、大盤報酬等 6 項指標 |
 | `utils/performance.py` | `PerformanceMonitor` | 效能監控裝飾器，統計函數執行時間 |
 
 ### 3.9 前端查詢網站 (`site/`)
@@ -200,6 +206,8 @@ get_stock_price() 呼叫
 | `scripts/backfill_us_prices.py` | 美股：回溯下載歷史股價至 2024-05 |
 | `scripts/fix_missing_indicators.py` | 修復缺失的 `indicator_json`（台股 `--tw` / 美股 `--us`） |
 | `scripts/verify_data.py` | 4 層資料驗證：完整性、值合理性、新/舊邏輯、篩選準確度 |
+| `scripts/backfill_missing_prices.py` | 手動補齊缺漏股價（台股 `--tw` / 美股），支援 `--dry-run` |
+| `scripts/verify_stock_gaps.py` | 資料完整性驗證：比對基準交易日曆，檢查缺日是否影響計算窗口 |
 
 ---
 
@@ -217,21 +225,31 @@ get_stock_price() 呼叫
 [下載資料庫 from Release]
           │
           ▼
-[抓取當日個股股價] ──────> [寫入 daily_price 表]
+[Step 1: 確保股票清單]
           │
           ▼
-[抓取大盤指數] ──────────> [寫入 market_index 表]
+[Step 2: 抓取當日個股股價] ──> [寫入 daily_price 表]
+          │
+          ▼
+[Step 2.5: 補漏歷史缺口] ──> [用基準股票建交易日曆，從 yfinance 補齊]
+          │
+          ▼
+[Step 3: 減資/分割偵測] ──> [偵測到則重新下載完整歷史]
+          │
+          ▼
+[Step 4: 抓取大盤指數] ──> [寫入 market_index 表]
           │
           ▼
 ┌─────────┴─────────┐
 │                   │
 ▼                   ▼
-[VCP 篩選]       [三線開花篩選]
+[Step 5: VCP 篩選] [Step 5: 三線開花篩選]
 │                   │
 ▼                   ▼
-[匯出 VCP Sheet]  [匯出三線開花 Sheet]
-│                   │
-└─────────┬─────────┘
+[Step 6: 匯出 Sheet]
+          │
+          ▼
+[Step 7: 每日自動驗證]
           │
           ▼
 [備份資料庫到 Release]
@@ -305,7 +323,7 @@ get_stock_price() 呼叫
 | **股價計算** | 使用**未調整股價**（與券商一致） | 使用**調整後股價**（adj_close） |
 | **股票數量** | ~1,700 檔 | ~8,000 檔 |
 | **批次策略** | 逐檔查詢（FinMind 限制） | 批次 100 檔、間隔 5 秒、4 workers |
-| **分割偵測** | 無（台股不常見） | 有（`USSplitDetector`） |
+| **分割偵測** | 有（`SplitDetector`，FinMind 還原價） | 有（`USSplitDetector`，yfinance 比對） |
 | **產業分類補充** | FinMind 已包含 | 需額外從 yfinance 取得 |
 | **代號格式** | 純數字（如 2330） | 英文（如 AAPL），最長 20 字元 |
 | **Sheet 數量** | 共用公司主檔 + 2 個篩選 Sheet | 3 個獨立 Sheet |
