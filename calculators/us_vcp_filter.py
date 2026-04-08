@@ -111,7 +111,10 @@ class USVCPFilter:
         new_high_mask = self._filter_new_high_list(df)
 
         # 篩選打敗大盤（處理 NaN 值）
-        beat_market_mask = df["return_20d"].fillna(-float("inf")) > market_return_20d
+        # 過濾異常報酬率（> 500% 或 < -90% 視為分割/合股未修正）
+        return_20d = df["return_20d"].fillna(-float("inf"))
+        sane_return = (return_20d > -0.9) & (return_20d < 5.0)
+        beat_market_mask = (return_20d > market_return_20d) & sane_return
 
         # 合併條件（使用 .loc 避免 SettingWithCopyWarning）
         df = df.copy()

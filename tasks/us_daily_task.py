@@ -201,10 +201,11 @@ class USDailyTask:
         return result
 
     def _fetch_and_save_prices(self, target_date: date, stock_info: dict) -> int:
-        """取得並儲存美股股價（批量查詢）
+        """取得並儲存美股股價（批量查詢 + rate limit 重試）
 
         下載前一交易日 + 當日共 2 天資料，用於分割偵測比對。
         如果資料庫中已有該日期的資料，則跳過下載以避免 API 速率限制。
+        下載不完整時自動重試缺失的股票（最多 3 次）。
 
         Returns:
             當日股價筆數
@@ -212,6 +213,7 @@ class USDailyTask:
         # 先檢查資料庫中是否已有該日期的資料
         # 正常交易日應有 6000+ 筆，低於 5000 筆視為殘缺需重新下載
         MIN_PRICE_COUNT = 5000
+        MAX_RETRY = 3
         existing_count = self.db.get_price_count_by_date(target_date)
         if existing_count >= MIN_PRICE_COUNT:
             logger.info(f"資料庫中已有 {target_date} 的股價資料 ({existing_count} 筆)，跳過下載")
@@ -230,7 +232,7 @@ class USDailyTask:
         prev_trading_day = USMarketCalendar.get_previous_trading_day(target_date)
         download_start = prev_trading_day if prev_trading_day else target_date
 
-        # 使用 yfinance 批量查詢（下載 2 天，不增加 API 呼叫次數）
+        # 第一次下載
         price_df = self.client.get_stock_price(
             start_date=download_start,
             end_date=target_date,
@@ -239,6 +241,54 @@ class USDailyTask:
 
         if price_df.empty:
             return 0
+
+        # 儲存第一次結果
+        self.db.upsert_daily_price(price_df)
+        today_count = len(price_df[price_df["date"] == target_date])
+
+        # 重試：如果筆數不足，找出缺失的股票重新下載
+        for retry in range(1, MAX_RETRY + 1):
+            if today_count >= MIN_PRICE_COUNT:
+                break
+
+            # 找出已成功下載的股票
+            downloaded_ids = set(
+                price_df[price_df["date"] == target_date]["stock_id"].unique()
+            )
+            missing_ids = [s for s in stock_ids if s not in downloaded_ids]
+
+            if not missing_ids:
+                break
+
+            wait_time = 60 * retry  # 第1次等60秒，第2次120秒，第3次180秒
+            logger.warning(
+                f"股價不完整: {today_count} 筆 (< {MIN_PRICE_COUNT})，"
+                f"缺 {len(missing_ids)} 檔，"
+                f"等待 {wait_time} 秒後重試 ({retry}/{MAX_RETRY})..."
+            )
+            import time
+            time.sleep(wait_time)
+
+            retry_df = self.client.get_stock_price(
+                start_date=download_start,
+                end_date=target_date,
+                stock_ids=missing_ids
+            )
+
+            if not retry_df.empty:
+                self.db.upsert_daily_price(retry_df)
+                retry_count = len(retry_df[retry_df["date"] == target_date])
+                today_count += retry_count
+                # 合併到 price_df 供後續分割偵測用
+                price_df = pd.concat([price_df, retry_df], ignore_index=True)
+                logger.info(
+                    f"重試 {retry}: 補回 {retry_count} 筆，累計 {today_count} 筆"
+                )
+
+        if today_count < MIN_PRICE_COUNT:
+            logger.warning(
+                f"重試 {MAX_RETRY} 次後仍不完整: {today_count} 筆 < {MIN_PRICE_COUNT}"
+            )
 
         # 分割偵測：在 upsert 前先讀取 DB 中前一交易日的舊值
         self._fresh_prev_day_prices = {}
@@ -253,7 +303,7 @@ class USDailyTask:
                 if pd.notna(row.get("close"))
             }
 
-            # 從 DB 讀取前一交易日的舊收盤價（upsert 前）
+            # 從 DB 讀取前一交易日的舊收盤價
             db_prev_df = self.db.get_daily_prices(
                 prev_trading_day, prev_trading_day
             )
@@ -264,11 +314,6 @@ class USDailyTask:
                     if pd.notna(row.get("close_price"))
                 }
 
-        # 儲存至美股資料庫（包含前一日 + 當日）
-        count = self.db.upsert_daily_price(price_df)
-
-        # 回傳當日的筆數
-        today_count = len(price_df[price_df["date"] == target_date])
         return today_count
 
     def _fetch_and_save_market_index(self, target_date: date) -> int:
