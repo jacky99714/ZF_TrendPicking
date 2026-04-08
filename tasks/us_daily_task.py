@@ -391,7 +391,20 @@ class USDailyTask:
             logger.warning("重新下載歷史資料為空")
             return 0
 
-        # 覆蓋 DB 中的舊資料
+        # 先刪除 DB 中受影響股票的所有舊資料，再寫入新的
+        # 避免分割前的舊價格殘留（yfinance 可能不回傳分割前的歷史）
+        import sqlite3
+        conn = sqlite3.connect(self.db.db_path)
+        for stock_id in adjusted_stocks:
+            conn.execute(
+                "DELETE FROM us_daily_price WHERE stock_id = ?",
+                (stock_id,),
+            )
+        conn.commit()
+        conn.close()
+        logger.info(f"已刪除 {len(adjusted_stocks)} 檔股票的舊資料")
+
+        # 寫入新的歷史資料
         count = self.db.upsert_daily_price(history_df)
         logger.info(
             f"已重新下載並更新 {len(adjusted_stocks)} 檔股票的歷史資料 "
