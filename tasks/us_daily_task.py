@@ -362,8 +362,35 @@ class USDailyTask:
             logger.info("DB 中無前一交易日的舊資料，跳過分割偵測")
             return 0
 
-        # 偵測有價格調整的股票
+        # 偵測有價格調整的股票（方法 1：前一日 DB vs fresh 比對）
         adjusted_stocks = USSplitDetector.detect_adjusted_stocks(db_prices, fresh_prices)
+
+        # 方法 2：DB 有前一日資料但 yfinance 沒回傳前一日的股票
+        # 用今日價格 vs DB 前一日比對（抓 yfinance 刪除歷史的情況，如 NINE 合股）
+        today_prices = {}
+        import sqlite3
+        conn = sqlite3.connect(self.db.db_path)
+        rows = conn.execute(
+            "SELECT stock_id, close_price FROM us_daily_price WHERE date = ?",
+            (target_date.isoformat(),),
+        ).fetchall()
+        conn.close()
+        today_prices = {r[0]: float(r[1]) for r in rows if r[1]}
+
+        missing_from_fresh = set(db_prices.keys()) - set(fresh_prices.keys())
+        for stock_id in missing_from_fresh:
+            db_prev = db_prices.get(stock_id)
+            today_close = today_prices.get(stock_id)
+            if db_prev and today_close and db_prev > 0 and today_close > 0:
+                ratio = today_close / db_prev
+                if ratio > 1.5 or ratio < 0.67:
+                    if stock_id not in adjusted_stocks:
+                        adjusted_stocks.append(stock_id)
+                        logger.warning(
+                            f"  疑似分割（yfinance 無前日資料）: {stock_id} "
+                            f"DB前日={db_prev:.4f} → 今日={today_close:.4f} "
+                            f"(比值={ratio:.2f})"
+                        )
 
         if not adjusted_stocks:
             logger.info("未偵測到股票分割/合股，所有價格一致")
