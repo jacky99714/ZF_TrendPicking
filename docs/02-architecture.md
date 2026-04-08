@@ -171,6 +171,7 @@ get_stock_price() 呼叫
 | `utils/us_split_detector.py` | `USSplitDetector` | 美股分割/合股偵測：比對 DB 與 yfinance 歷史價格，自動標記需重新下載的股票 |
 | `utils/price_gap_filler.py` | `fill_price_gaps()` | 股價缺漏自動補齊：用基準股票建交易日曆，逐股比對並從 yfinance 下載缺日 |
 | `utils/daily_verifier.py` | `DailyVerifier` | 每日自動驗證：檢查股價筆數、篩選結果、大盤報酬等 6 項指標 |
+| `utils/objective_verifier.py` | `ObjectiveVerifier` | 四層客觀驗證：L1 價格準確性、L2 獨立重算、L3 Sheet 回讀、L4 歷史一致性。結果寫入驗證 Sheet「驗證日誌」分頁 |
 | `utils/performance.py` | `PerformanceMonitor` | 效能監控裝飾器，統計函數執行時間 |
 
 ### 3.9 前端查詢網站 (`site/`)
@@ -208,6 +209,17 @@ get_stock_price() 呼叫
 | `scripts/verify_data.py` | 4 層資料驗證：完整性、值合理性、新/舊邏輯、篩選準確度 |
 | `scripts/backfill_missing_prices.py` | 手動補齊缺漏股價（台股 `--tw` / 美股），支援 `--dry-run` |
 | `scripts/verify_stock_gaps.py` | 資料完整性驗證：比對基準交易日曆，檢查缺日是否影響計算窗口 |
+
+### 3.11 錯誤案例記錄 (`history/`)
+
+記錄系統運行中遇到的問題、根因分析、修正措施，供未來回顧。
+
+| 檔案 | 說明 |
+|------|------|
+| `history/README.md` | 案例索引 + 命名規則 |
+| `history/2026-04-07_NINE_reverse_split.md` | NINE 反向合股導致 72900% 異常報酬率 |
+| `history/2026-04-07_us_rate_limit.md` | yfinance rate limit 導致 2000 檔漏抓 |
+| `history/2026-04-03_tw_price_gaps.md` | 台股股價缺漏導致 15 檔均線失真 |
 
 ---
 
@@ -249,7 +261,10 @@ get_stock_price() 呼叫
 [Step 6: 匯出 Sheet]
           │
           ▼
-[Step 7: 每日自動驗證]
+[Step 7: 每日自動驗證（DailyVerifier 6 項檢查）]
+          │
+          ▼
+[Step 8: 客觀驗證（ObjectiveVerifier L1~L4，結果寫入驗證 Sheet）]
           │
           ▼
 [備份資料庫到 Release]

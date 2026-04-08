@@ -222,7 +222,30 @@ python scripts/verify_stock_gaps.py --stock 2330
 
 > 注意：檢查資料必須從 GitHub Release 下載線上 DB，本機 DB 不會每天更新。
 
-### 3.9 其他維護腳本
+### 3.9 客觀驗證報告
+
+每日排程自動執行客觀驗證（Step 8），結果寫入驗證 Sheet 的**「驗證日誌」**分頁。
+
+查看方式：
+1. 開啟驗證 Sheet（台股 `SHEET_ID_VERIFICATION` / 美股 `US_SHEET_ID_VERIFICATION`）
+2. 切到「驗證日誌」分頁
+3. 每天一行，L1~L4 各欄顯示 PASS/FAIL
+
+也可從 GitHub Actions 的 log 查看詳細報告。
+
+### 3.10 錯誤案例記錄
+
+`history/` 目錄記錄系統運行中遇到的問題案例，含根因分析和修正措施。
+
+```bash
+# 查看所有案例
+ls history/
+
+# 案例命名規則: {日期}_{簡述}.md
+# 例: 2026-04-07_NINE_reverse_split.md
+```
+
+### 3.11 其他維護腳本
 
 ```bash
 # 匯出單一股票驗證資料
@@ -270,7 +293,8 @@ python scripts/fix_missing_indicators.py --us
    Step 4:   大盤指數下載
    Step 5:   篩選（VCP + 三線開花）
    Step 6:   匯出 Google Sheet
-   Step 7:   每日自動驗證
+   Step 7:   每日自動驗證（DailyVerifier 6 項檢查）
+   Step 8:   客觀驗證（ObjectiveVerifier L1~L4，結果寫入驗證 Sheet「驗證日誌」）
 8. Backup database to Release (gzip 壓縮，--clobber 覆蓋)
 9. Upload logs (always，30天有效)
 10. Trigger deploy-site workflow（部署前端）
