@@ -600,6 +600,7 @@
       <button class="sort-btn" data-sort="return">20日漲幅</button>
       <button class="sort-btn" data-sort="gap">突破差距</button>
       <button class="sort-btn tv-btn" id="tvExportBtn" title="複製清單到剪貼簿並開啟 TradingView">TV 匯出</button>
+      <button class="sort-btn tv-btn" id="aiExportBtn" title="複製 CSV 清單給 AI 分析">AI 匯出</button>
     </div>
 
     <div id="content">
@@ -943,7 +944,12 @@
       </div>`;
       html += merged.map(s => renderDateStockRow(s)).join('');
       document.getElementById('content').innerHTML = `<div class="results">${html}</div>`;
-      currentVisibleStocks = merged.map(s => ({ stock_id: s.stock_id, market: s.market }));
+      currentVisibleStocks = merged.map(s => ({
+        stock_id: s.stock_id,
+        market: s.market,
+        isNew: s.isNew,
+        stock_name: (INDEX.stocks[s.stock_id] && INDEX.stocks[s.stock_id].n) || ''
+      }));
     }
 
     function renderDateStockRow(s) {
@@ -1126,6 +1132,28 @@
       window.open('https://tw.tradingview.com/chart/', '_blank');
     }
 
+    // === AI Export (CSV) ===
+    function exportToAI() {
+      if (currentVisibleStocks.length === 0) return;
+
+      const header = '新/舊,股號,股名';
+      const rows = currentVisibleStocks.map(s => {
+        const newOld = s.isNew ? '新' : '舊';
+        return `${newOld},${s.stock_id},${s.stock_name}`;
+      });
+      const text = [header, ...rows].join('\n');
+
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('aiExportBtn');
+        btn.textContent = `已複製 ${rows.length} 檔`;
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = 'AI 匯出';
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    }
+
     // === Event Listeners ===
     document.querySelectorAll('.mode-tab').forEach(tab => {
       tab.addEventListener('click', () => {
@@ -1159,6 +1187,7 @@
     document.getElementById('datePrev').addEventListener('click', () => navigateDate('prev'));
     document.getElementById('dateNext').addEventListener('click', () => navigateDate('next'));
     document.getElementById('tvExportBtn').addEventListener('click', exportToTradingView);
+    document.getElementById('aiExportBtn').addEventListener('click', exportToAI);
 
     document.querySelectorAll('.filter-btn').forEach(btn => {
       btn.addEventListener('click', () => {
