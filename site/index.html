@@ -986,6 +986,28 @@
       return new Set(DATE_INDEX[prevDate].map(e => e.stock_id));
     }
 
+    function getFilteredStocksForDate(dateStr) {
+      const entries = DATE_INDEX[dateStr];
+      if (!entries) return [];
+      const filtered = entries.filter(e => {
+        if (activeFilters.market !== 'all' && e.market !== activeFilters.market) return false;
+        if (activeFilters.types.size > 0) {
+          const match = (activeFilters.types.has('strong') && e.type === 'vcp' && e.is_strong)
+            || (activeFilters.types.has('newhigh') && e.type === 'vcp' && e.is_new_high)
+            || (activeFilters.types.has('sanxian') && e.type === 'sanxian');
+          if (!match) return false;
+        }
+        return true;
+      });
+      const map = {};
+      for (const e of filtered) {
+        if (!map[e.stock_id]) {
+          map[e.stock_id] = { stock_id: e.stock_id, stock_name: e.stock_name, market: e.market };
+        }
+      }
+      return Object.values(map);
+    }
+
     function sortStocks(arr) {
       const safeNum = v => (v != null && isFinite(v)) ? v : -Infinity;
       switch (currentSort) {
@@ -1136,11 +1158,41 @@
     function exportToAI() {
       if (currentVisibleStocks.length === 0) return;
 
-      const header = '新/舊,股號,股名';
-      const rows = currentVisibleStocks.map(s => {
-        const newOld = s.isNew ? '新' : '舊';
-        return `${newOld},${s.stock_id},${s.stock_name}`;
-      });
+      const header = '新/舊,市場,股號,股名';
+      const buildRow = (stockId, stockName, market, label) => {
+        let marketLabel;
+        if (market === 'tw') {
+          const stock = INDEX.stocks[stockId];
+          marketLabel = (stock && stock.e === 'tpex') ? '上櫃' : '上市';
+        } else {
+          marketLabel = '美股';
+        }
+        return `${label},${marketLabel},${stockId},${stockName}`;
+      };
+
+      const rows = currentVisibleStocks.map(s =>
+        buildRow(s.stock_id, s.stock_name, s.market, s.isNew ? '新' : '舊')
+      );
+
+      // 日期模式：計算昨日有、今日消失的淘汰清單
+      if (currentMode === 'date') {
+        const dateStr = document.getElementById('dateInput').value;
+        const idx = ALL_DATES.indexOf(dateStr);
+        const prevDate = (idx >= 0 && idx < ALL_DATES.length - 1) ? ALL_DATES[idx + 1] : null;
+        if (prevDate && DATE_INDEX[prevDate]) {
+          const todayIds = new Set(currentVisibleStocks.map(s => s.stock_id));
+          const prevFiltered = getFilteredStocksForDate(prevDate);
+          for (const p of prevFiltered) {
+            if (!todayIds.has(p.stock_id)) {
+              const name = p.stock_name
+                || (INDEX.stocks[p.stock_id] && INDEX.stocks[p.stock_id].n)
+                || '';
+              rows.push(buildRow(p.stock_id, name, p.market, '淘汰'));
+            }
+          }
+        }
+      }
+
       const text = [header, ...rows].join('\n');
 
       navigator.clipboard.writeText(text).then(() => {
