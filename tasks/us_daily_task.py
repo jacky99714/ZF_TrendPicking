@@ -260,7 +260,8 @@ class USDailyTask:
             if not missing_ids:
                 break
 
-            wait_time = 60 * retry  # 第1次等60秒，第2次120秒，第3次180秒
+            # rate limit 需要較長恢復時間：第1次 5min，第2次 15min，第3次 15min
+            wait_time = 300 if retry == 1 else 900
             logger.warning(
                 f"股價不完整: {today_count} 筆 (< {MIN_PRICE_COUNT})，"
                 f"缺 {len(missing_ids)} 檔，"

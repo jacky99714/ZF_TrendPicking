@@ -54,9 +54,9 @@ GOOGLE_CREDENTIALS_PATH = os.getenv(
 
 # ==================== API 效能設定 ====================
 # yfinance 批次下載設定（約 8000+ 檔美股）
-US_BATCH_SIZE = int(os.getenv("US_BATCH_SIZE", "100"))  # 每批下載股票數
-US_BATCH_INTERVAL = int(os.getenv("US_BATCH_INTERVAL", "5"))  # 批次間隔（秒）
-US_MAX_WORKERS = int(os.getenv("US_MAX_WORKERS", "4"))  # 平行下載 worker 數
+US_BATCH_SIZE = int(os.getenv("US_BATCH_SIZE", "50"))  # 每批下載股票數（保守設定避免 rate limit）
+US_BATCH_INTERVAL = int(os.getenv("US_BATCH_INTERVAL", "10"))  # 批次間隔（秒）
+US_MAX_WORKERS = int(os.getenv("US_MAX_WORKERS", "2"))  # 平行下載 worker 數（同時最多 100 檔請求）
 
 # 股票清單來源
 NASDAQ_FTP_URL = "ftp://ftp.nasdaqtrader.com/SymbolDirectory/nasdaqtraded.txt"
