@@ -165,7 +165,7 @@ class USDailyTask:
             self._export_to_sheet(target_date, vcp_results, sanxian_results, market_return)
 
             # Step 6: 每日自動驗證
-            verifier = DailyVerifier(self.db, market="us", min_price_count=7000)
+            verifier = DailyVerifier(self.db, market="us", min_price_count=6500)
             verify_ok = verifier.verify_all(
                 target_date, vcp_results, sanxian_results,
                 price_count, market_return,
@@ -212,7 +212,7 @@ class USDailyTask:
         """
         # 先檢查資料庫中是否已有該日期的資料
         # 正常交易日應有 6000+ 筆，低於 5000 筆視為殘缺需重新下載
-        MIN_PRICE_COUNT = 5000
+        MIN_PRICE_COUNT = 6500
         MAX_RETRY = 3
         existing_count = self.db.get_price_count_by_date(target_date)
         if existing_count >= MIN_PRICE_COUNT:
