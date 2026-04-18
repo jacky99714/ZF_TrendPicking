@@ -18,6 +18,7 @@ from utils.us_split_detector import USSplitDetector
 from utils.daily_verifier import DailyVerifier
 from utils.objective_verifier import ObjectiveVerifier
 from utils.price_gap_filler import fill_price_gaps
+from utils.internal_split_detector import detect_and_fix_internal_splits
 
 
 class USDailyTask:
@@ -150,6 +151,19 @@ class USDailyTask:
             # Step 2.6: 偵測分割並重新下載受影響股票的歷史資料
             split_count = self._detect_and_refresh_splits(target_date)
             result["split_refreshed_count"] = split_count
+
+            # Step 2.7: 內部分割偵測（DB 自身相鄰價格跳動，補足前兩層的盲點）
+            try:
+                internal_result = detect_and_fix_internal_splits(
+                    db_path=self.db.db_path,
+                    price_table="us_daily_price",
+                    whitelist_table="us_anomaly_whitelist",
+                    scan_days=30,
+                )
+                result["internal_split_result"] = internal_result
+            except Exception as e:
+                logger.warning(f"內部分割偵測失敗（不影響後續流程）: {e}")
+                result["internal_split_result"] = {"error": str(e)}
 
             # Step 3: 取得並儲存大盤指數
             market_count = self._fetch_and_save_market_index(target_date)

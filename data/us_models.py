@@ -231,3 +231,44 @@ class USFilterResult(USBase):
 
     def __repr__(self):
         return f"<USFilterResult({self.filter_type}, {self.filter_date}, {self.stock_id})>"
+
+
+class USAnomalyWhitelist(USBase):
+    """
+    美股價格異常白名單
+
+    用於記錄已驗證為「真實價格波動」的股票/日期，
+    避免內部分割偵測重複觸發（如 BIRD 真實 6x 暴漲）。
+    """
+    __tablename__ = "us_anomaly_whitelist"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    stock_id: Mapped[str] = mapped_column(
+        String(20), nullable=False, index=True, comment="股票代號"
+    )
+    anomaly_date: Mapped[date_type] = mapped_column(
+        Date, nullable=False, comment="異常發生的日期（價格跳動的日期）"
+    )
+    prev_close: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 4), nullable=True, comment="前一日收盤價"
+    )
+    today_close: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 4), nullable=True, comment="當日收盤價"
+    )
+    ratio: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(10, 4), nullable=True, comment="跳動比值 today/prev"
+    )
+    reason: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True, comment="加入白名單原因（如：重新下載後仍有跳動，視為真實波動）"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), comment="建立時間"
+    )
+
+    __table_args__ = (
+        UniqueConstraint("stock_id", "anomaly_date", name="uq_us_anomaly_stock_date"),
+        Index("idx_us_anomaly_stock", "stock_id"),
+    )
+
+    def __repr__(self):
+        return f"<USAnomalyWhitelist({self.stock_id}, {self.anomaly_date}, ratio={self.ratio})>"
