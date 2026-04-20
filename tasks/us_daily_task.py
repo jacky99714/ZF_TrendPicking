@@ -392,11 +392,18 @@ class USDailyTask:
         conn.close()
         today_prices = {r[0]: float(r[1]) for r in rows if r[1]}
 
+        # 方法 2：對 penny stock（< $1）不偵測，避免假警報
+        # （penny stock 買賣價差大，每日 30%+ 波動正常，會大量觸發無效重抓）
+        MIN_PRICE_FOR_DETECT = 1.0
         missing_from_fresh = set(db_prices.keys()) - set(fresh_prices.keys())
         for stock_id in missing_from_fresh:
             db_prev = db_prices.get(stock_id)
             today_close = today_prices.get(stock_id)
-            if db_prev and today_close and db_prev > 0 and today_close > 0:
+            if (
+                db_prev and today_close
+                and db_prev >= MIN_PRICE_FOR_DETECT
+                and today_close >= MIN_PRICE_FOR_DETECT
+            ):
                 ratio = today_close / db_prev
                 if ratio > 1.5 or ratio < 0.67:
                     if stock_id not in adjusted_stocks:

@@ -174,6 +174,11 @@ class USStockClientFree(USStockClientBase):
                 if len(batch) == 1:
                     # 單一股票時，columns 不是 MultiIndex
                     ticker = batch[0]
+                    # 檢查必要 columns 是否存在（yfinance 對 delisted ticker 可能回空格式）
+                    if "Close" not in data.columns:
+                        logger.warning(f"批次 {current_batch} 單檔 {ticker} 缺 Close 欄位，跳過")
+                        failed_stocks += 1
+                        continue
                     df = data.reset_index()
                     df["stock_id"] = ticker
                     df = df.rename(columns={
@@ -246,6 +251,11 @@ class USStockClientFree(USStockClientBase):
 
         # 合併所有資料
         result_df = pd.concat(all_data, ignore_index=True)
+
+        # 防呆：若所有資料都缺 close 欄位，直接回空
+        if "close" not in result_df.columns:
+            logger.warning("合併後資料無 close 欄位，回傳空 DataFrame")
+            return pd.DataFrame()
 
         # 標準化日期格式
         result_df["date"] = pd.to_datetime(result_df["date"]).dt.date

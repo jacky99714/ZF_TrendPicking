@@ -25,6 +25,9 @@ from loguru import logger
 JUMP_UP_THRESHOLD = 1.5    # 上漲 50% 視為異常
 JUMP_DOWN_THRESHOLD = 0.67  # 下跌 33% 視為異常
 
+# 最低價門檻：< $1 的 penny stock 不偵測（買賣價差大，每日波動 30%+ 正常）
+MIN_PRICE_FOR_DETECT = 1.0
+
 # 一次最多處理檔數（避免 rate limit + 控制執行時間）
 MAX_PROCESS_PER_RUN = 20
 
@@ -177,13 +180,13 @@ def _scan_anomalies(
                (curr_close * 1.0 / prev_close) AS ratio
         FROM price_pairs
         WHERE prev_close IS NOT NULL
-          AND prev_close > 0
-          AND curr_close > 0
+          AND prev_close >= ?
+          AND curr_close >= ?
           AND ((curr_close * 1.0 / prev_close) > ?
             OR (curr_close * 1.0 / prev_close) < ?)
         ORDER BY ABS((curr_close * 1.0 / prev_close) - 1) DESC
         """,
-        (cutoff, JUMP_UP_THRESHOLD, JUMP_DOWN_THRESHOLD),
+        (cutoff, MIN_PRICE_FOR_DETECT, MIN_PRICE_FOR_DETECT, JUMP_UP_THRESHOLD, JUMP_DOWN_THRESHOLD),
     ).fetchall()
 
     return [
