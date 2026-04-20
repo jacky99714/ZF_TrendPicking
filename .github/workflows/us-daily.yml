@@ -22,7 +22,7 @@ on:
 jobs:
   us-daily-task:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     permissions:
       contents: write
       actions: read
