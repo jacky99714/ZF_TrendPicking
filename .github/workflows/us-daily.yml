@@ -22,7 +22,7 @@ on:
 jobs:
   us-daily-task:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     permissions:
       contents: write
       actions: read
@@ -89,6 +89,7 @@ jobs:
           fi
 
       - name: Run US daily task
+        timeout-minutes: 150
         env:
           GOOGLE_CREDENTIALS_PATH: credentials.json
           US_SHEET_ID_COMPANY_MASTER: ${{ secrets.US_SHEET_ID_COMPANY_MASTER }}
@@ -111,7 +112,10 @@ jobs:
           fi
 
       # 備份美股資料庫到 GitHub Release
+      # if: always() — 即使 daily task step 失敗/timeout，仍要備份 DB
+      # 避免「task cancel → DB 沒備份 → 隔天比對失準」的連鎖效應
       - name: Backup US database to Release
+        if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
