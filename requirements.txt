@@ -7,7 +7,7 @@ pandas>=2.0.0
 numpy>=1.24.0
 
 # 股票資料 API
-yfinance>=1.0.0
+yfinance>=1.0.0,<2.0.0  # 已驗證相容 1.0~1.4；2.x 為避免破壞變更先擋住
 lxml>=5.0.0  # yfinance 網頁解析需要
 requests>=2.31.0  # FinMind API 呼叫
 

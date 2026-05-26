@@ -461,6 +461,9 @@ class YFinanceClient:
                 # yfinance 1.0+: 扁平化欄位名稱，取 Price 層 (level=1)
                 stock_df.columns = stock_df.columns.get_level_values(1)
 
+            # yfinance 1.4+ 把 index.name 設為 None，reset_index 後欄位會變 'index'
+            # 統一補回 'Date'，讓下面的 rename 在 1.0 / 1.4 都能對到
+            stock_df.index.name = "Date"
             stock_df = stock_df.reset_index()
             stock_df = stock_df.rename(columns={
                 "Date": "date",
@@ -491,6 +494,9 @@ class YFinanceClient:
                             continue
                         stock_df = df[symbol].copy()
 
+                    # yfinance 1.4+ 把 index.name 設為 None，reset_index 後欄位會變 'index'
+                    # 統一補回 'Date'，讓下面的 rename 在 1.0 / 1.4 都能對到
+                    stock_df.index.name = "Date"
                     stock_df = stock_df.reset_index()
                     stock_df = stock_df.rename(columns={
                         "Date": "date",
