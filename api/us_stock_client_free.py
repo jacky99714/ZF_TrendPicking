@@ -179,6 +179,9 @@ class USStockClientFree(USStockClientBase):
                         logger.warning(f"批次 {current_batch} 單檔 {ticker} 缺 Close 欄位，跳過")
                         failed_stocks += 1
                         continue
+                    # yfinance 1.4+ 把 index.name 設為 None，reset_index 後欄位會變 'index'
+                    # 統一補回 'Date'，讓下面的 rename 在 1.0 / 1.4 都能對到
+                    data.index.name = "Date"
                     df = data.reset_index()
                     df["stock_id"] = ticker
                     df = df.rename(columns={
@@ -211,6 +214,9 @@ class USStockClientFree(USStockClientBase):
                                 failed_stocks += 1
                                 continue
 
+                            # yfinance 1.4+ 把 index.name 設為 None，reset_index 後欄位會變 'index'
+                            # 統一補回 'Date'，讓下面的 rename 在 1.0 / 1.4 都能對到
+                            ticker_data.index.name = "Date"
                             df = ticker_data.reset_index()
                             df["stock_id"] = ticker
                             df = df.rename(columns={
