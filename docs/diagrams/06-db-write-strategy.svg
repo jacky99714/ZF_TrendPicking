@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 300" width="900" height="300">
+  <defs>
+    <marker id="arrow5" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="900" height="300" fill="#f8fafc" rx="12"/>
+
+  <!-- 股價路徑 -->
+  <text x="60" y="36" font-size="12.5" fill="#0891b2" font-weight="700">▌股價 upsert_daily_price()</text>
+  <rect x="60" y="46" width="240" height="50" rx="8" fill="#fff" stroke="#cbd5e1"/>
+  <text x="180" y="67" text-anchor="middle" font-size="11" fill="#334155">drop_duplicates</text>
+  <text x="180" y="84" text-anchor="middle" font-size="11" fill="#334155">按 date 分組</text>
+  <line x1="300" y1="71" x2="332" y2="71" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow5)"/>
+  <rect x="334" y="46" width="250" height="50" rx="8" fill="#fee2e2" stroke="#ef4444"/>
+  <text x="459" y="67" text-anchor="middle" font-size="11" fill="#b91c1c" font-weight="700">只刪「該日期 × 即將插入的 stock_id」</text>
+  <text x="459" y="84" text-anchor="middle" font-size="10" fill="#64748b">避免跨日期笛卡爾積誤刪</text>
+  <line x1="584" y1="71" x2="616" y2="71" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow5)"/>
+  <rect x="618" y="46" width="222" height="50" rx="8" fill="#cffafe" stroke="#0891b2"/>
+  <text x="729" y="74" text-anchor="middle" font-size="11.5" fill="#155e75" font-weight="700">bulk_insert_mappings</text>
+
+  <line x1="450" y1="110" x2="450" y2="130" stroke="#e2e8f0" stroke-width="1"/>
+
+  <!-- 篩選結果路徑 -->
+  <text x="60" y="150" font-size="12.5" fill="#7c3aed" font-weight="700">▌篩選結果 save_filter_results(results, filter_type, filter_date)</text>
+  <rect x="60" y="162" width="240" height="50" rx="8" fill="#fee2e2" stroke="#ef4444"/>
+  <text x="180" y="183" text-anchor="middle" font-size="11" fill="#b91c1c" font-weight="700">① DELETE 當日同 filter_type</text>
+  <text x="180" y="200" text-anchor="middle" font-size="10" fill="#64748b">覆寫式（非累加），可安全重跑</text>
+  <line x1="300" y1="187" x2="332" y2="187" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow5)"/>
+  <rect x="334" y="162" width="250" height="50" rx="8" fill="#ede9fe" stroke="#7c3aed"/>
+  <text x="459" y="183" text-anchor="middle" font-size="11" fill="#5b21b6" font-weight="700">② 組 records（含 indicator_json）</text>
+  <text x="459" y="200" text-anchor="middle" font-size="10" fill="#64748b">VCP / 三線各填自己的欄位</text>
+  <line x1="584" y1="187" x2="616" y2="187" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow5)"/>
+  <rect x="618" y="162" width="222" height="50" rx="8" fill="#cffafe" stroke="#0891b2"/>
+  <text x="729" y="190" text-anchor="middle" font-size="11.5" fill="#155e75" font-weight="700">③ bulk_insert_mappings</text>
+
+  <!-- indicator_json 內容 -->
+  <rect x="60" y="232" width="780" height="52" rx="8" fill="#ecfdf5" stroke="#059669" stroke-dasharray="4 3"/>
+  <text x="78" y="252" font-size="11.5" fill="#065f46" font-weight="700">indicator_json 內容（供前端 tooltip）</text>
+  <text x="78" y="271" font-size="10.5" fill="#334155">VCP：{close, ma50, ma150, ma200, ma200_slope, return_20d, market_return, high_5d, high_260d}　｜　三線：{close, ma8, ma21, ma55, high_55d, second_high}</text>
+</svg>

@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 900" width="920" height="900">
+  <defs>
+    <marker id="arrow0" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="920" height="900" fill="#f8fafc" rx="12"/>
+
+  <!-- 資料來源 -->
+  <text x="460" y="34" text-anchor="middle" font-size="13" fill="#64748b" font-weight="600">資料來源 · External Sources</text>
+  <g>
+    <rect x="60" y="46" width="240" height="46" rx="8" fill="#fff" stroke="#cbd5e1"/>
+    <text x="180" y="68" text-anchor="middle" font-size="13" fill="#1e293b" font-weight="600">FinMind API</text>
+    <text x="180" y="84" text-anchor="middle" font-size="10.5" fill="#64748b">台股股價 · 主來源</text>
+    <rect x="340" y="46" width="240" height="46" rx="8" fill="#fff" stroke="#cbd5e1"/>
+    <text x="460" y="68" text-anchor="middle" font-size="13" fill="#1e293b" font-weight="600">yfinance</text>
+    <text x="460" y="84" text-anchor="middle" font-size="10.5" fill="#64748b">台股備援 · 美股股價</text>
+    <rect x="620" y="46" width="240" height="46" rx="8" fill="#fff" stroke="#cbd5e1"/>
+    <text x="740" y="68" text-anchor="middle" font-size="13" fill="#1e293b" font-weight="600">NASDAQ FTP</text>
+    <text x="740" y="84" text-anchor="middle" font-size="10.5" fill="#64748b">美股股票清單</text>
+  </g>
+  <line x1="460" y1="92" x2="460" y2="118" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow0)"/>
+
+  <!-- 階段一 抓資料 -->
+  <rect x="50" y="120" width="820" height="128" rx="12" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <circle cx="80" cy="148" r="14" fill="#2563eb"/>
+  <text x="80" y="153" text-anchor="middle" font-size="14" fill="#fff" font-weight="700">1</text>
+  <text x="106" y="153" font-size="17" fill="#1e3a8a" font-weight="700">抓資料 Fetch</text>
+  <text x="700" y="153" font-size="11" fill="#1e40af">api/ · tasks 下載步驟</text>
+  <rect x="70" y="166" width="385" height="68" rx="8" fill="#fff" stroke="#93c5fd"/>
+  <text x="86" y="187" font-size="12.5" fill="#1d4ed8" font-weight="700">🇹🇼 台股 · HybridClient</text>
+  <text x="86" y="206" font-size="11" fill="#334155">FinMind 主 → yfinance 備援/補齊（三段式）</text>
+  <text x="86" y="223" font-size="11" fill="#334155">RateLimiter 600 次/時 · 收盤 0 價自動修正</text>
+  <rect x="465" y="166" width="385" height="68" rx="8" fill="#fff" stroke="#93c5fd"/>
+  <text x="481" y="187" font-size="12.5" fill="#1d4ed8" font-weight="700">🇺🇸 美股 · USStockClientFree</text>
+  <text x="481" y="206" font-size="11" fill="#334155">yfinance 批次下載 40 檔/批 · 間隔 15s</text>
+  <text x="481" y="223" font-size="11" fill="#334155">缺料自動重試（5/15/15 分鐘，最多 3 次）</text>
+  <line x1="460" y1="248" x2="460" y2="274" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow0)"/>
+  <text x="476" y="266" font-size="10.5" fill="#64748b">原始 OHLCV DataFrame</text>
+
+  <!-- 階段二 計算篩選 -->
+  <rect x="50" y="276" width="820" height="128" rx="12" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <circle cx="80" cy="304" r="14" fill="#7c3aed"/>
+  <text x="80" y="309" text-anchor="middle" font-size="14" fill="#fff" font-weight="700">2</text>
+  <text x="106" y="309" font-size="17" fill="#5b21b6" font-weight="700">計算與篩選 Compute</text>
+  <text x="720" y="309" font-size="11" fill="#6d28d9">calculators/</text>
+  <rect x="70" y="322" width="250" height="68" rx="8" fill="#fff" stroke="#c4b5fd"/>
+  <text x="86" y="343" font-size="12.5" fill="#6d28d9" font-weight="700">均線前置計算</text>
+  <text x="86" y="361" font-size="11" fill="#334155">VCP：MA50/150/200</text>
+  <text x="86" y="378" font-size="11" fill="#334155">三線：MA8/21/55</text>
+  <rect x="330" y="322" width="255" height="68" rx="8" fill="#fff" stroke="#c4b5fd"/>
+  <text x="346" y="343" font-size="12.5" fill="#6d28d9" font-weight="700">VCP 強勢股</text>
+  <text x="346" y="361" font-size="11" fill="#334155">強勢清單 ∪ 新高清單</text>
+  <text x="346" y="378" font-size="11" fill="#334155">須打敗大盤 20 日報酬</text>
+  <rect x="595" y="322" width="255" height="68" rx="8" fill="#fff" stroke="#c4b5fd"/>
+  <text x="611" y="343" font-size="12.5" fill="#6d28d9" font-weight="700">三線開花</text>
+  <text x="611" y="361" font-size="11" fill="#334155">MA8&gt;MA21&gt;MA55 多頭</text>
+  <text x="611" y="378" font-size="11" fill="#334155">55 日收盤新高 + 差距比例</text>
+  <line x1="460" y1="404" x2="460" y2="430" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow0)"/>
+  <text x="476" y="422" font-size="10.5" fill="#64748b">篩選結果 list[dict] + indicator_json</text>
+
+  <!-- 階段三 資料庫 -->
+  <rect x="50" y="432" width="820" height="120" rx="12" fill="#cffafe" stroke="#0891b2" stroke-width="1.5"/>
+  <circle cx="80" cy="460" r="14" fill="#0891b2"/>
+  <text x="80" y="465" text-anchor="middle" font-size="14" fill="#fff" font-weight="700">3</text>
+  <text x="106" y="465" font-size="17" fill="#155e75" font-weight="700">寫入資料庫 Persist</text>
+  <text x="700" y="465" font-size="11" fill="#0e7490">data/ · SQLite</text>
+  <rect x="70" y="478" width="385" height="62" rx="8" fill="#fff" stroke="#67e8f9"/>
+  <text x="86" y="499" font-size="12.5" fill="#0e7490" font-weight="700">🇹🇼 zf_trend.db · 4 表</text>
+  <text x="86" y="517" font-size="11" fill="#334155">stock_info · daily_price</text>
+  <text x="86" y="533" font-size="11" fill="#334155">market_index · filter_result</text>
+  <rect x="465" y="478" width="385" height="62" rx="8" fill="#fff" stroke="#67e8f9"/>
+  <text x="481" y="499" font-size="12.5" fill="#0e7490" font-weight="700">🇺🇸 zf_trend_us.db · 5 表</text>
+  <text x="481" y="517" font-size="11" fill="#334155">us_* 四表 + us_anomaly_whitelist</text>
+  <text x="481" y="533" font-size="11" fill="#334155">寫入策略：刪當日同類 → 批次插入</text>
+  <line x1="460" y1="552" x2="460" y2="578" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow0)"/>
+
+  <!-- 階段四 匯出 -->
+  <rect x="50" y="580" width="820" height="128" rx="12" fill="#d1fae5" stroke="#059669" stroke-width="1.5"/>
+  <circle cx="80" cy="608" r="14" fill="#059669"/>
+  <text x="80" y="613" text-anchor="middle" font-size="14" fill="#fff" font-weight="700">4</text>
+  <text x="106" y="613" font-size="17" fill="#065f46" font-weight="700">匯出 Export</text>
+  <text x="690" y="613" font-size="11" fill="#047857">exporters/ · scripts/</text>
+  <rect x="70" y="626" width="385" height="68" rx="8" fill="#fff" stroke="#6ee7b7"/>
+  <text x="86" y="647" font-size="12.5" fill="#047857" font-weight="700">Google Sheet</text>
+  <text x="86" y="666" font-size="11" fill="#334155">VCP / 三線 / 驗證分頁（每日 YYMMDD）</text>
+  <text x="86" y="683" font-size="11" fill="#334155">新股白底、舊股灰底 + 指標排序</text>
+  <rect x="465" y="626" width="385" height="68" rx="8" fill="#fff" stroke="#6ee7b7"/>
+  <text x="481" y="647" font-size="12.5" fill="#047857" font-weight="700">前端 JSON（v2 拆分）</text>
+  <text x="481" y="666" font-size="11" fill="#334155">index.json + months/ + indicators/</text>
+  <text x="481" y="683" font-size="11" fill="#334155">Lazy loading → GitHub Pages</text>
+  <line x1="460" y1="708" x2="460" y2="734" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow0)"/>
+
+  <!-- 終點 -->
+  <rect x="250" y="736" width="420" height="50" rx="10" fill="#1e293b"/>
+  <text x="460" y="760" text-anchor="middle" font-size="14" fill="#fff" font-weight="700">投資人查詢介面</text>
+  <text x="460" y="777" text-anchor="middle" font-size="10.5" fill="#cbd5e1">Google Sheet 表單 · GitHub Pages 靜態網站</text>
+
+  <!-- 驗證註腳 -->
+  <rect x="250" y="808" width="420" height="40" rx="8" fill="#fff7ed" stroke="#f59e0b" stroke-dasharray="4 3"/>
+  <text x="460" y="826" text-anchor="middle" font-size="11.5" fill="#b45309" font-weight="700">每日驗證貫穿全程</text>
+  <text x="460" y="841" text-anchor="middle" font-size="10" fill="#92400e">DailyVerifier（6 項）+ ObjectiveVerifier（L1~L4 客觀比對）</text>
+</svg>

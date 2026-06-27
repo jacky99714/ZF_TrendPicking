@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 340" width="900" height="340">
+  <defs>
+    <marker id="arrow4" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="900" height="340" fill="#f8fafc" rx="12"/>
+
+  <rect x="350" y="18" width="200" height="40" rx="20" fill="#1e293b"/>
+  <text x="450" y="43" text-anchor="middle" font-size="13" fill="#fff" font-weight="700">price_df（365 天）</text>
+  <line x1="450" y1="58" x2="450" y2="78" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow4)"/>
+
+  <rect x="230" y="80" width="440" height="52" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="450" y="101" text-anchor="middle" font-size="12.5" fill="#5b21b6" font-weight="700">prepare_sanxian_data() 均線前置</text>
+  <text x="450" y="120" text-anchor="middle" font-size="10" fill="#334155">SMA8/21/55 · high_55d（收盤新高）· second_high_55d（收盤次高）</text>
+  <line x1="450" y1="132" x2="450" y2="152" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow4)"/>
+
+  <rect x="150" y="154" width="600" height="74" rx="10" fill="#fff" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="450" y="176" text-anchor="middle" font-size="13" fill="#6d28d9" font-weight="700">篩選條件（兩條 AND）</text>
+  <text x="170" y="200" font-size="11.5" fill="#334155">① 三線多頭排列：close &gt; MA8 &gt; MA21 &gt; MA55</text>
+  <text x="170" y="220" font-size="11.5" fill="#334155">② 55 日收盤新高：close ≥ high_55d（近 55 交易日收盤最高）</text>
+  <line x1="450" y1="228" x2="450" y2="248" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow4)"/>
+
+  <rect x="230" y="250" width="440" height="40" rx="10" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.5"/>
+  <text x="450" y="275" text-anchor="middle" font-size="12" fill="#854d0e" font-weight="700">gap_ratio = (今日收盤 / second_high_55d) − 1</text>
+  <line x1="450" y1="290" x2="450" y2="306" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow4)"/>
+  <rect x="270" y="306" width="360" height="30" rx="8" fill="#d1fae5" stroke="#059669"/>
+  <text x="450" y="326" text-anchor="middle" font-size="11.5" fill="#065f46" font-weight="700">輸出：today_price · second_high_55d · gap_ratio</text>
+</svg>

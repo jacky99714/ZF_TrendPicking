@@ -71,8 +71,14 @@
 
 **indicator_json 內容範例**（VCP）：
 ```json
-{"ma50": 95.2, "ma150": 90.1, "ma200": 88.5, "ma200_slope_20d": 0.015,
- "return_20d": 0.065, "high_5d": 97.0, "high_260d": 99.1}
+{"close": 96.5, "ma50": 95.2, "ma150": 90.1, "ma200": 88.5, "ma200_slope": 0.015,
+ "return_20d": 0.065, "market_return": 0.02, "high_5d": 97.0, "high_260d": 99.1}
+```
+
+**indicator_json 內容範例**（三線開花）：
+```json
+{"close": 102.5, "ma8": 101.2, "ma21": 99.8, "ma55": 97.3,
+ "high_55d": 105.0, "second_high": 104.1}
 ```
 
 ---
@@ -146,11 +152,30 @@
 
 **索引**：`INDEX(filter_date, filter_type)`
 
+#### us_anomaly_whitelist 表
+
+| 欄位 | 型別 | 約束 | 說明 |
+|------|------|------|------|
+| id | Integer | PK, autoincrement | 自動遞增 ID |
+| stock_id | String(20) | NOT NULL, indexed | 股票代號 |
+| anomaly_date | Date | NOT NULL | 異常發生的日期（價格跳動的日期） |
+| prev_close | Numeric(12,4) | nullable | 前一日收盤價 |
+| today_close | Numeric(12,4) | nullable | 當日收盤價 |
+| ratio | Numeric(10,4) | nullable | 跳動比值 today/prev |
+| reason | Text | nullable | 加入白名單原因 |
+| created_at | DateTime | server_default=now() | 建立時間 |
+
+**約束**：
+- `UNIQUE(stock_id, anomaly_date)`
+- `INDEX(stock_id)`
+
+**用途**：記錄已驗證為「真實價格波動」的股票/日期，避免內部分割偵測重複觸發（例：BIRD 真實 6x 暴漲）。
+
 ---
 
 ### 1.3 SQLite 最佳化設定
 
-美股資料庫（`USSQLiteDatabase`）啟用以下 SQLite 最佳化：
+兩個 SQLite 資料庫（台股 `SQLiteDatabase`、美股 `USSQLiteDatabase`）皆啟用以下 SQLite 最佳化：
 
 ```sql
 PRAGMA journal_mode = WAL;    -- Write-Ahead Logging，提升併發讀寫效能
@@ -169,7 +194,7 @@ PRAGMA synchronous = NORMAL;  -- 平衡安全性與效能
 | Base URL | `https://api.finmindtrade.com/api/v4/data` |
 | 認證 | Token-based（環境變數 `FINMIND_TOKEN`） |
 | 限流 | 免費帳號 600 次/小時 |
-| 限流機制 | Token Bucket（`api/rate_limiter.py`） |
+| 限流機制 | 固定間隔節流（`min_interval = 3600/calls_per_hour`，類別名 `RateLimiter`，`api/rate_limiter.py`） |
 
 **使用的 Dataset**：
 
@@ -177,7 +202,8 @@ PRAGMA synchronous = NORMAL;  -- 平衡安全性與效能
 |---------|------|---------|
 | `TaiwanStockInfo` | 取得台股上市櫃清單 | stock_id, stock_name, industry_category, type |
 | `TaiwanStockPrice` | 取得個股日線資料 | date, stock_id, open, max, min, close, Trading_Volume |
-| `TaiwanStockTotalMarketValue` | 取得大盤指數 | date, TAIEX |
+| `TaiwanStockPrice`（`data_id="TAIEX"`） | 取得大盤指數（主要來源） | date, close |
+| `TaiwanStockTotalReturnIndex` | 取得大盤指數（fallback，TAIEX 失敗時改用報酬指數） | date, price |
 
 ### 2.2 yfinance（台股備援+美股主要）
 
@@ -196,12 +222,12 @@ PRAGMA synchronous = NORMAL;  -- 平衡安全性與效能
 
 **批次下載**：
 - 使用 `yfinance.download()` 批次下載多檔股票
-- 美股設定：每批 100 檔、間隔 5 秒、4 個平行 workers
+- 美股設定：每批 40 檔、間隔 15 秒；workers=2（僅用於 sector/industry 抓取，價格下載由 yfinance 內部 threads 處理）
 - 台股備援：自適應批次大小（根據錯誤率動態調整）
 
 **auto_adjust 設定**：
-- 台股：使用**未調整股價**（`auto_adjust=False`），與券商報價一致
-- 美股：使用**調整後股價**（含 adj_close），反映分割/配息
+- 台股：FinMind 路徑（`TaiwanStockPrice`）走**未調整股價**，與券商報價一致；yfinance 備援則為 `auto_adjust=True`（調整後股價）
+- 美股：`auto_adjust=False`，保留**未調整 OHLC**，並額外存 Adj Close 至 `adj_close` 欄
 
 ### 2.3 NASDAQ FTP（美股股票清單）
 
@@ -219,9 +245,13 @@ PRAGMA synchronous = NORMAL;  -- 平衡安全性與效能
 | Security Name | 公司名稱 |
 | Listing Exchange | 上市交易所（N=NYSE, Q=NASDAQ, A=AMEX, etc.） |
 | ETF | 是否為 ETF（Y/N） |
-| Market Category | 市場分類 |
+| Test Issue | 是否為測試代號（Y/N） |
 
-**過濾邏輯**：排除 `ETF=Y` 的項目、排除測試代號、排除檔案結尾行
+**過濾邏輯**：
+- 僅保留 `ETF == "N"` 且 `Test Issue == "N"` 的項目
+- 代號需符合 regex `^[A-Z0-9./-]+$`（保留如 `BRK.B` 的正常特殊字元，排除測試股票）
+- 代號長度 ≤ 10（排除權證或特殊商品）
+- 排除空代號與檔案結尾行
 
 ### 2.4 Google Sheets API
 
@@ -338,9 +368,9 @@ PRAGMA synchronous = NORMAL;  -- 平衡安全性與效能
 | `US_SHEET_ID_VCP` | 是 | (空) | 美股 VCP Sheet ID |
 | `US_SHEET_ID_SANXIAN` | 是 | (空) | 美股三線開花 Sheet ID |
 | `US_SHEET_ID_VERIFICATION` | 否 | (空) | 美股驗證用 Sheet ID |
-| `US_BATCH_SIZE` | 否 | `100` | 批次下載每批股票數 |
-| `US_BATCH_INTERVAL` | 否 | `5` | 批次間隔（秒） |
-| `US_MAX_WORKERS` | 否 | `4` | 平行下載 worker 數 |
+| `US_BATCH_SIZE` | 否 | `40` | 批次下載每批股票數 |
+| `US_BATCH_INTERVAL` | 否 | `15` | 批次間隔（秒） |
+| `US_MAX_WORKERS` | 否 | `2` | 平行 worker 數（用於 sector/industry 抓取） |
 | `US_MAX_RETRIES` | 否 | `3` | 最大重試次數 |
 | `US_LOG_LEVEL` | 否 | `INFO` | 日誌等級 |
 

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 390" width="900" height="390">
+  <defs>
+    <marker id="arrow6" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="900" height="390" fill="#f8fafc" rx="12"/>
+
+  <!-- 輸入 -->
+  <rect x="30" y="40" width="200" height="80" rx="10" fill="#fff" stroke="#cbd5e1"/>
+  <text x="130" y="62" text-anchor="middle" font-size="12" fill="#1e293b" font-weight="700">篩選結果 list[dict]</text>
+  <text x="130" y="82" text-anchor="middle" font-size="10" fill="#64748b">（已 enrich，含指標）</text>
+  <text x="130" y="102" text-anchor="middle" font-size="10.5" fill="#7c3aed" font-weight="600">＋ prev_stock_ids</text>
+  <text x="130" y="116" text-anchor="middle" font-size="9.5" fill="#64748b">前一交易日同類型清單</text>
+  <line x1="230" y1="80" x2="262" y2="80" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow6)"/>
+
+  <!-- 排序邏輯 -->
+  <rect x="264" y="34" width="300" height="92" rx="10" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.5"/>
+  <text x="414" y="56" text-anchor="middle" font-size="12.5" fill="#854d0e" font-weight="700">複合排序鍵</text>
+  <text x="280" y="78" font-size="11" fill="#334155">sort_key = ( is_old , −指標 )</text>
+  <text x="280" y="96" font-size="10.5" fill="#334155">① 新股(is_old=0) 在前、舊股(=1) 在後</text>
+  <text x="280" y="113" font-size="10.5" fill="#334155">② 同色內：VCP→return_20d、三線→gap_ratio 降冪</text>
+  <line x1="564" y1="80" x2="596" y2="80" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow6)"/>
+
+  <!-- Sheet 示意 -->
+  <text x="748" y="28" text-anchor="middle" font-size="11.5" fill="#047857" font-weight="700">每日分頁 YYMMDD</text>
+  <rect x="598" y="36" width="300" height="22" fill="#334155"/>
+  <text x="608" y="51" font-size="10" fill="#fff">代號 / 股名 / 產業 / 近20日漲幅 / 強 / 高</text>
+  <rect x="598" y="58" width="300" height="20" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="608" y="72" font-size="10" fill="#1e293b">2330　台積電　…　＋12.4%　O</text>
+  <rect x="598" y="78" width="300" height="20" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="608" y="92" font-size="10" fill="#1e293b">2317　鴻海　…　＋9.1%　O</text>
+  <rect x="598" y="98" width="300" height="20" fill="#d9d9d9" stroke="#e2e8f0"/>
+  <text x="608" y="112" font-size="10" fill="#1e293b">1101　台泥　…　＋7.8%</text>
+  <rect x="598" y="118" width="300" height="20" fill="#d9d9d9" stroke="#e2e8f0"/>
+  <text x="608" y="132" font-size="10" fill="#1e293b">2454　聯發科　…　＋5.2%</text>
+  <text x="598" y="150" font-size="10" fill="#16a34a" font-weight="600">▮ 白底＝新股</text>
+  <text x="720" y="150" font-size="10" fill="#64748b" font-weight="600">▮ 灰底＝舊股（前一日已入選）</text>
+
+  <!-- 下半：套色 + 頁籤 -->
+  <line x1="414" y1="126" x2="414" y2="190" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow6)"/>
+  <rect x="120" y="192" width="300" height="64" rx="10" fill="#fff" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="270" y="214" text-anchor="middle" font-size="12" fill="#15803d" font-weight="700">_apply_new_old_colors()</text>
+  <text x="270" y="233" text-anchor="middle" font-size="10.5" fill="#334155">batch_format 一次套色</text>
+  <text x="270" y="248" text-anchor="middle" font-size="10" fill="#64748b">新股 rgb(1,1,1) / 舊股 rgb(.85,.85,.85)</text>
+  <rect x="480" y="192" width="300" height="64" rx="10" fill="#fff" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="630" y="214" text-anchor="middle" font-size="12" fill="#15803d" font-weight="700">sort_worksheets_by_date()</text>
+  <text x="630" y="233" text-anchor="middle" font-size="10.5" fill="#334155">頁籤依日期降冪重排</text>
+  <text x="630" y="248" text-anchor="middle" font-size="10" fill="#64748b">固定頁籤置前，最新日期在前</text>
+
+  <!-- 認證/目的地註腳 -->
+  <rect x="120" y="288" width="660" height="78" rx="10" fill="#ecfdf5" stroke="#059669" stroke-dasharray="4 3"/>
+  <text x="138" y="310" font-size="11.5" fill="#065f46" font-weight="700">認證與目的地</text>
+  <text x="138" y="330" font-size="10.5" fill="#334155">· gspread + service account（credentials.json，台股美股共用同一份憑證）</text>
+  <text x="138" y="348" font-size="10.5" fill="#334155">· 寫入 VCP / 三線 / 驗證 三組 Sheet；缺料字串用 _safe_str（NaN→"-"）、數值用 _safe_val（NaN/inf→空）</text>
+  <text x="138" y="362" font-size="10" fill="#64748b">　驗證頁另拆 YYMMDD_VCP（20 欄）與 YYMMDD_三線（14 欄）</text>
+</svg>

@@ -166,8 +166,8 @@ Sheet 匯出時先依**顏色**排序（新股在前、舊股在後），再在�
 |----------|---------|------|
 | `daily.yml` | 週一~五 UTC 09:45 / 手動 | 台股每日篩選 + Sheet 匯出 + DB 備份 |
 | `us-daily.yml` | 週一~五 UTC 21:30 / 手動 | 美股每日篩選 + Sheet 匯出 + DB 備份 |
-| `monthly.yml` | 手動 | 台股每月公司主檔更新 |
-| `us-monthly.yml` | 手動 | 美股每月公司主檔更新 |
+| `monthly.yml` | 每月 1 日 UTC 01:00 / 手動 | 台股每月公司主檔更新 |
+| `us-monthly.yml` | 每月 1 日 UTC 01:30 / 手動 | 美股每月公司主檔更新 |
 | `deploy-site.yml` | 每日篩選後自動 / 手動 | 前端靜態網站部署到 GitHub Pages |
 | `export-stock.yml` | 手動 | 匯出股票資料 |
 
@@ -187,11 +187,11 @@ gh workflow run us-daily.yml --field target_date=2026-03-28 --field force=true
 - **重要**：不可同時平行跑多個相同市場的 workflow，否則 DB 備份會互相覆蓋
 
 ### 美股股價完整性保護
-`tasks/us_daily_task.py` 中，當天股價筆數低於 5,000 筆時視為不完整，會強制重新下載（正常交易日約 6,400~6,800 筆）。避免殘缺 DB 被錯誤跳過。
+`tasks/us_daily_task.py` 中，當天股價筆數低於 `MIN_PRICE_COUNT = 6,500` 筆時視為不完整，會強制重新下載（正常交易日約 6,400~6,800 筆）。避免殘缺 DB 被錯誤跳過。
 
 ---
 
-## 美股新增檔案（14 個）
+## 美股新增檔案（16 個）
 
 | 檔案 | 用途 |
 |------|------|
@@ -199,6 +199,8 @@ gh workflow run us-daily.yml --field target_date=2026-03-28 --field force=true
 | `data/us_models.py` | 美股資料模型 |
 | `data/us_database.py` | 美股資料庫操作 |
 | `utils/us_trading_calendar.py` | 美股交易日曆 |
+| `utils/us_split_detector.py` | 美股分割/合股偵測（第二層：fresh vs DB 比對） |
+| `utils/internal_split_detector.py` | 美股內部分割偵測（第三層：DB 相鄰價格跳動 + 白名單） |
 | `api/us_stock_client.py` | 美股 API 抽象介面 |
 | `api/us_stock_client_free.py` | 免費版（yfinance） |
 | `api/us_stock_client_paid.py` | 付費版預留 |

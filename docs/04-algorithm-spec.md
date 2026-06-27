@@ -39,6 +39,8 @@ SMA(N) = (P₁ + P₂ + ... + Pₙ) / N
 
 > **重要**：VCP 新高用的是**最高價**，三線開花新高用的是**收盤價**。
 
+> **台美差異**：VCP 高低點 `calculate_high_low()` 的 `min_periods`：台股 = 1（資料不足也計算）；美股 = `max(period // 2, 1)`（需至少半數資料才計算）。
+
 ### 1.3 零價修正
 
 **問題**：FinMind API 偶爾回傳 OHLC 全為 0 但有成交量的異常資料，會導致均線計算偏差和 `pct_change` 產生 `inf`。
@@ -216,10 +218,10 @@ gap_ratio = (today_price / second_high_55d) - 1
 
 | 項目 | 台股 | 美股 |
 |------|------|------|
-| 均線計算用價格 | **未調整收盤價** (close_price) | **調整後收盤價** (adj_close) |
-| 原因 | 與券商報價一致，直覺理解 | 反映分割/配息，歷史資料連續 |
-| yfinance 設定 | `auto_adjust=False` | 預設（auto_adjust） |
-| 零價修正 | 有（FinMind 偶發） | 無需（yfinance 不會回傳零價） |
+| 均線計算用價格 | **未調整收盤價** (close_price) | **未調整原始收盤價** (close_price)；`adj_close` 雖入庫但**不用於均線** |
+| 原因 | 主來源為 FinMind，與券商報價一致、直覺理解 | `auto_adjust=False` 取原始 close，未還原分割/配息 → 須靠 Step 2.6/2.7 分割偵測重抓修正 |
+| yfinance 設定 | `auto_adjust=True`（僅為備援；未調整是因主來源為 FinMind） | `auto_adjust=False` |
+| 零價修正 | 有（FinMind 偶發） | `prepare_*_data` 仍呼叫 `fix_zero_prices`（有實作，yfinance 少觸發） |
 
 ---
 
@@ -227,15 +229,33 @@ gap_ratio = (today_price / second_high_55d) - 1
 
 ### 5.1 執行順序
 
+**台股每日流程**（`tasks/daily_task.py`）：
+
 ```
-Step 1: 確保股票清單
-Step 2: 下載今日股價
+Step 1:   確保股票清單
+Step 2:   下載今日股價
 Step 2.5: 補漏歷史缺口（price_gap_filler）
-Step 3: 減資/分割偵測
-Step 4: 大盤指數
-Step 5: 篩選（VCP + 三線開花）
-Step 6: 匯出 Sheet
-Step 7: 每日驗證
+Step 3:   減資/分割偵測
+Step 4:   大盤指數
+Step 5:   篩選（VCP + 三線開花）
+Step 6:   匯出 Sheet
+Step 7:   每日驗證（DailyVerifier）
+Step 8:   客觀驗證（ObjectiveVerifier，四層 L1-L4）
+```
+
+**美股每日流程**（`tasks/us_daily_task.py`，編號與台股略有差異）：
+
+```
+Step 1:   確保股票清單
+Step 2:   下載今日股價
+Step 2.5: 補漏歷史缺口
+Step 2.6: 分割偵測（us_split_detector，方法 1 / 方法 2）
+Step 2.7: 內部分割偵測（internal_split_detector，掃描 DB 自身相鄰跳動）
+Step 3:   大盤指數
+Step 4:   篩選（VCP + 三線開花）
+Step 5:   匯出 Sheet
+Step 6:   每日驗證（DailyVerifier）
+Step 7:   客觀驗證（ObjectiveVerifier；美股客觀驗證為 Step 7，非 Step 8）
 ```
 
 ### 5.2 補漏機制（Step 2.5）
@@ -261,16 +281,18 @@ Step 7: 每日驗證
 
 ```
 初始設定：
-  batch_size = 50（每批股票數）
-  interval = 2（批次間隔秒數）
+  batch_size = 100（initial_batch_size，每批股票數）
+  interval = 5.0（initial_interval，批次間隔秒數）
+  min_batch_size = 10、max_batch_size = 500
+  max_interval = 30.0
 
 每批完成後：
-  if 錯誤率 > 30%:
-    batch_size = max(batch_size * 0.7, 10)    # 縮小批次
-    interval = min(interval * 1.5, 30)         # 增加間隔
-  elif 錯誤率 < 5%:
-    batch_size = min(batch_size * 1.2, 200)    # 擴大批次
-    interval = max(interval * 0.8, 1)          # 縮短間隔
+  if 錯誤率 > 20%（0.2）:
+    batch_size = max(batch_size // 2, min_batch_size)   # 折半縮小批次
+    interval = min(interval * 2, max_interval)          # 間隔加倍（上限 30 秒）
+  elif 連續成功次數 ≥ 5:
+    batch_size = min(batch_size * 2, max_batch_size)    # 批次加倍（上限 500）
+    # 成功時不縮短 interval
 ```
 
 ---
@@ -288,9 +310,9 @@ Step 7: 每日驗證
 4. 重新下載受影響股票的完整歷史資料
 ```
 
-### 7.2 美股（yfinance 偵測 — 雙層檢查）
+### 7.2 美股（yfinance 偵測 — 三層檢查）
 
-**模組**：`utils/us_split_detector.py` + `tasks/us_daily_task.py`
+**模組**：`utils/us_split_detector.py` + `utils/internal_split_detector.py` + `tasks/us_daily_task.py`
 
 **方法 1**（DB 前一日 vs yfinance 前一日）：
 ```
@@ -310,6 +332,23 @@ Step 7: 每日驗證
 
 > **為什麼需要方法 2**：某些 penny stock 合股後（如 NINE 0.012 → 8.20），
 > yfinance 會直接刪除合股前的所有歷史，導致方法 1 無法比對。
+
+**第三層**（內部分割偵測 — `internal_split_detector`，於 Step 2.7 執行）：
+```
+1. 掃描 DB 自身相鄰交易日的收盤價跳動（不比對外部來源）
+2. ratio = today_close / prev_close
+   if ratio >= JUMP_UP(1.5) or ratio <= JUMP_DOWN(0.67):
+     → 視為疑似分割
+3. 參數：
+   MIN_PRICE_FOR_DETECT = 1.0   （股價低於 1.0 不偵測）
+   MAX_PROCESS_PER_RUN  = 20    （每次最多處理 20 檔）
+   HISTORY_DAYS         = 365   （重抓 365 天歷史）
+   scan_days            = 30    （回掃近 30 天找跳動）
+4. 白名單機制：重抓後若仍跳動 → 視為真實波動，加入白名單不再重複處理
+```
+
+> **第三層的意義**：方法 1/方法 2 依賴 yfinance 外部比對；第三層改掃 DB
+> 自身歷史，攔截前兩層漏掉的跳動，並用白名單避免把真實大漲大跌誤判為分割。
 
 **偵測到分割後的處理**：
 ```
@@ -338,23 +377,23 @@ return_20d < -90% → 排除篩選
 
 **模組**：`tasks/us_daily_task.py` (`_fetch_and_save_prices`)
 
-美股約 7,000 檔，yfinance 批次下載時可能觸發 429 Too Many Requests。
+美股約 8,000 檔，yfinance 批次下載時可能觸發 429 Too Many Requests。
 
 ```
-第一次下載（全部 7,000 檔）
-  ↓ 檢查筆數 < 5,000？
+第一次下載（全部 8,000 檔）
+  ↓ 檢查筆數 < 6,500？（MIN_PRICE_COUNT：跳過下載 / 觸發重試的判定門檻）
   ↓ 是 → 找出缺失的股票
-  ↓ 等待 60 秒 → 只重試缺的
-  ↓ 檢查筆數 < 5,000？
-  ↓ 是 → 等待 120 秒 → 再重試
+  ↓ 等待 300 秒（5 分） → 只重試缺的
+  ↓ 檢查筆數 < 6,500？
+  ↓ 是 → 等待 900 秒（15 分） → 再重試
   ↓ 最多 3 次
 ```
 
 | 參數 | 值 |
 |------|-----|
-| MIN_PRICE_COUNT | 5,000 |
+| MIN_PRICE_COUNT | 6,500（低於此筆數視為不完整 → 跳過下載 / 觸發重試） |
 | MAX_RETRY | 3 |
-| 重試間隔 | 60s, 120s, 180s（遞增） |
+| 重試間隔 | 300s / 900s / 900s（5 分 / 15 分 / 15 分；`wait_time = 300 if retry==1 else 900`） |
 
 ---
 
@@ -411,9 +450,9 @@ return_20d < -90% → 排除篩選
 
 | 參數 | 預設值 | 環境變數 | 說明 |
 |------|-------|---------|------|
-| 批次大小 | 100 | `US_BATCH_SIZE` | 每批下載股票數 |
-| 批次間隔 | 5 秒 | `US_BATCH_INTERVAL` | 批次間等待時間 |
-| 平行 Workers | 4 | `US_MAX_WORKERS` | 並行下載執行緒數 |
+| 批次大小 | 40 | `US_BATCH_SIZE` | 每批下載股票數 |
+| 批次間隔 | 15 秒 | `US_BATCH_INTERVAL` | 批次間等待時間 |
+| 平行 Workers | 2 | `US_MAX_WORKERS` | 並行下載執行緒數 |
 
 ### 10.5 API 限流參數
 

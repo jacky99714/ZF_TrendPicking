@@ -75,7 +75,8 @@ python main.py init
 3. 從 FinMind 下載台股上市櫃清單
 4. 下載近 1 年歷史股價
 5. 下載大盤指數
-6. 匯出公司主檔到 Google Sheet
+
+> 公司主檔匯出 Google Sheet 由每月任務 `python main.py monthly` 負責，`init` 不執行。
 
 預估時間：10-20 分鐘
 
@@ -92,8 +93,8 @@ python us_main.py init
 3. 從 NASDAQ FTP 下載美股清單
 4. 批次下載 8000+ 檔美股歷史股價
 5. 下載 S&P 500 / 道瓊 / NASDAQ 指數
-6. 從 yfinance 補充 sector/industry
-7. 匯出公司主檔到 Google Sheet
+
+> `init` **不**補充 sector/industry，也**不**匯出公司主檔到 Google Sheet。NASDAQ FTP 清單本身不含產業分類；產業分類補充（從 yfinance）與公司主檔匯出 Sheet 皆由每月任務 `python us_main.py monthly` 負責。**init 後須再跑一次 `monthly` 才會有產業分類**。
 
 預估時間：30-60 分鐘（受網路速度影響）
 
@@ -181,11 +182,12 @@ python scripts/export_to_json_v2.py
 ### 3.6 資料驗證
 
 ```bash
-# 台股驗證（4 層：完整性、值合理性、新/舊邏輯、篩選準確度）
+# 驗證（4 層：完整性、值合理性、新/舊邏輯、篩選準確度）
 python scripts/verify_data.py
 
-# 美股驗證
-python scripts/verify_data.py --us
+# 支援的參數：--quick（快速檢查，跳過抽樣重算）、--sample N（抽樣重算天數，預設 5）
+python scripts/verify_data.py --quick
+python scripts/verify_data.py --sample 10
 ```
 
 ### 3.7 股價缺漏補齊
@@ -248,8 +250,10 @@ ls history/
 ### 3.11 其他維護腳本
 
 ```bash
-# 匯出單一股票驗證資料
-python scripts/export_single_stock.py
+# 匯出單一股票驗證資料（需傳入股票代號）
+python scripts/export_single_stock.py <股票代號>
+# 範例
+python scripts/export_single_stock.py 2330
 
 # 修復缺失的 indicator_json
 python scripts/fix_missing_indicators.py
@@ -297,8 +301,11 @@ python scripts/fix_missing_indicators.py --us
    Step 8:   客觀驗證（ObjectiveVerifier L1~L4，結果寫入驗證 Sheet「驗證日誌」）
 8. Backup database to Release (gzip 壓縮，--clobber 覆蓋)
 9. Upload logs (always，30天有效)
-10. Trigger deploy-site workflow（部署前端）
 ```
+
+> 前端部署**不在** daily workflow 內：daily.yml / us-daily.yml 沒有主動觸發 deploy-site，而是由 `deploy-site.yml` 透過 `on: workflow_run` 監聽 daily 完成事件後自動觸發。
+
+> **美股股價完整性保護**：美股每日任務當天股價筆數低於 `MIN_PRICE_COUNT = 6500` 時視為不完整，會強制重新下載（正常交易日約 6000+ 筆），避免殘缺 DB 被錯誤跳過。
 
 ### 4.3 GitHub Secrets 設定
 
@@ -365,7 +372,7 @@ python scripts/fix_missing_indicators.py --us
 | 工作流程 | timeout-minutes |
 |---------|----------------|
 | 台股 daily | 無限制（預設 360 分鐘） |
-| 美股 daily | 60 分鐘 |
+| 美股 daily | job 180 分鐘（Run task step 150 分鐘） |
 | 台股 monthly | 無限制 |
 | 美股 monthly | 30 分鐘 |
 
@@ -418,7 +425,7 @@ GitHub Actions 日誌：
 | 項目 | 說明 |
 |------|------|
 | 台股每日任務 | ~5-10 分鐘（FinMind 逐檔查詢約 1,700 檔） |
-| 美股每日任務 | ~15-30 分鐘（yfinance 批次 100 檔 × ~80 批） |
+| 美股每日任務 | ~60-120 分鐘（yfinance 批次 40 檔 × ~200 批、批次間隔 15 秒；job timeout 180 分） |
 | 台股每月任務 | ~2-3 分鐘 |
 | 美股每月任務 | ~10-15 分鐘（含 sector/industry 補充） |
 | SQLite WAL 模式 | 提升併發讀寫效能 |

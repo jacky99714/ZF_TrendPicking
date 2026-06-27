@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" width="900" height="470">
+  <defs>
+    <marker id="arrow1" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="900" height="470" fill="#f8fafc" rx="12"/>
+
+  <!-- 入口 -->
+  <rect x="320" y="20" width="260" height="46" rx="23" fill="#1e3a8a"/>
+  <text x="450" y="42" text-anchor="middle" font-size="13" fill="#fff" font-weight="700">get_stock_price(stock_ids, 日期)</text>
+  <text x="450" y="58" text-anchor="middle" font-size="10" fill="#bfdbfe">hybrid_client.py:105</text>
+  <line x1="450" y1="66" x2="450" y2="92" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow1)"/>
+
+  <!-- ① FinMind 主要 -->
+  <rect x="300" y="94" width="300" height="58" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="450" y="116" text-anchor="middle" font-size="13" fill="#1e3a8a" font-weight="700">① 主要：FinMind 取得股價</text>
+  <text x="450" y="135" text-anchor="middle" font-size="10.5" fill="#334155">未調整價 TaiwanStockPrice（與券商均線一致）</text>
+  <line x1="450" y1="152" x2="450" y2="178" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow1)"/>
+
+  <!-- 決策菱形 -->
+  <polygon points="450,180 580,232 450,284 320,232" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.5"/>
+  <text x="450" y="226" text-anchor="middle" font-size="12" fill="#854d0e" font-weight="700">FinMind 成功率</text>
+  <text x="450" y="244" text-anchor="middle" font-size="12" fill="#854d0e" font-weight="700">≥ 50%？</text>
+
+  <!-- 左：否 → 完整備援 -->
+  <line x1="320" y1="232" x2="150" y2="232" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow1)"/>
+  <text x="232" y="222" text-anchor="middle" font-size="11" fill="#dc2626" font-weight="700">否 / 空</text>
+  <rect x="30" y="300" width="240" height="70" rx="10" fill="#fff" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="150" y="322" text-anchor="middle" font-size="12.5" fill="#b91c1c" font-weight="700">② 完整備援</text>
+  <text x="150" y="341" text-anchor="middle" font-size="10.5" fill="#334155">整批改用 yfinance</text>
+  <text x="150" y="357" text-anchor="middle" font-size="10.5" fill="#334155">.TW 為主、.TWO 上櫃備援</text>
+  <line x1="150" y1="232" x2="150" y2="300" stroke="#ef4444" stroke-width="2" stroke-dasharray="5 3" marker-end="url(#arrow1)"/>
+
+  <!-- 右：是但有缺 → 補齊 -->
+  <line x1="580" y1="232" x2="750" y2="232" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow1)"/>
+  <text x="668" y="222" text-anchor="middle" font-size="11" fill="#16a34a" font-weight="700">是（部分缺）</text>
+  <rect x="630" y="300" width="240" height="70" rx="10" fill="#fff" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="750" y="322" text-anchor="middle" font-size="12.5" fill="#15803d" font-weight="700">③ 補齊模式</text>
+  <text x="750" y="341" text-anchor="middle" font-size="10.5" fill="#334155">只對 missing_stocks 用 yfinance 補</text>
+  <text x="750" y="357" text-anchor="middle" font-size="10.5" fill="#334155">pd.concat 合併兩邊</text>
+  <line x1="750" y1="232" x2="750" y2="300" stroke="#16a34a" stroke-width="2" stroke-dasharray="5 3" marker-end="url(#arrow1)"/>
+
+  <!-- 全成功直走 -->
+  <text x="450" y="304" text-anchor="middle" font-size="10" fill="#64748b">（全數成功則直接採用 FinMind 結果）</text>
+
+  <!-- 匯流 → upsert -->
+  <line x1="150" y1="370" x2="150" y2="408" stroke="#94a3b8" stroke-width="2"/>
+  <line x1="750" y1="370" x2="750" y2="408" stroke="#94a3b8" stroke-width="2"/>
+  <line x1="150" y1="408" x2="750" y2="408" stroke="#94a3b8" stroke-width="2"/>
+  <line x1="450" y1="408" x2="450" y2="426" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow1)"/>
+  <rect x="300" y="428" width="300" height="36" rx="8" fill="#cffafe" stroke="#0891b2"/>
+  <text x="450" y="451" text-anchor="middle" font-size="12.5" fill="#155e75" font-weight="700">upsert_daily_price() → daily_price 表</text>
+</svg>

@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 880" width="900" height="880">
+  <defs>
+    <marker id="arrow8" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#cbd5e1"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="900" height="880" fill="#f8fafc" rx="12"/>
+  <text x="40" y="30" font-size="13" fill="#64748b" font-weight="700">主流程（台股）</text>
+  <text x="675" y="30" font-size="13" fill="#c2410c" font-weight="700">🇺🇸 美股差異</text>
+  <line x1="60" y1="60" x2="60" y2="808" stroke="#cbd5e1" stroke-width="2"/>
+
+  <!-- 通用節點繪製：圓 + 卡片 + 美股註記 -->
+  <!-- Step 0 -->
+  <circle cx="60" cy="64" r="11" fill="#64748b"/>
+  <rect x="92" y="44" width="540" height="42" rx="8" fill="#fff" stroke="#cbd5e1"/>
+  <text x="106" y="62" font-size="12.5" fill="#334155" font-weight="700">前置　檢查是否為交易日</text>
+  <text x="106" y="79" font-size="10.5" fill="#64748b">非交易日且未 --force 則 skip；force 則退回最近交易日</text>
+  <rect x="668" y="48" width="212" height="34" rx="6" fill="#fff7ed" stroke="#fb923c"/>
+  <text x="680" y="69" font-size="10" fill="#9a3412">用 USMarketCalendar（美股假期）</text>
+
+  <!-- Step 1 -->
+  <circle cx="60" cy="128" r="11" fill="#2563eb"/>
+  <text x="60" y="132" text-anchor="middle" font-size="11" fill="#fff" font-weight="700">1</text>
+  <rect x="92" y="108" width="540" height="42" rx="8" fill="#dbeafe" stroke="#2563eb"/>
+  <text x="106" y="126" font-size="12.5" fill="#1e3a8a" font-weight="700">Step 1　確保股票清單</text>
+  <text x="106" y="143" font-size="10.5" fill="#334155">DB 為空才抓 → upsert_stock_info；清單仍空則中止</text>
+
+  <!-- Step 2 -->
+  <circle cx="60" cy="192" r="11" fill="#2563eb"/>
+  <text x="60" y="196" text-anchor="middle" font-size="11" fill="#fff" font-weight="700">2</text>
+  <rect x="92" y="172" width="540" height="42" rx="8" fill="#dbeafe" stroke="#2563eb"/>
+  <text x="106" y="190" font-size="12.5" fill="#1e3a8a" font-weight="700">Step 2　抓當日股價並寫入</text>
+  <text x="106" y="207" font-size="10.5" fill="#334155">台股單日；price=0 視為非交易日中止</text>
+  <rect x="668" y="172" width="212" height="42" rx="6" fill="#fff7ed" stroke="#fb923c"/>
+  <text x="680" y="190" font-size="10" fill="#9a3412">下載「前一日+當日」共 2 天；</text>
+  <text x="680" y="205" font-size="10" fill="#9a3412">&lt;6500 筆重抓、缺料重試 3 次</text>
+
+  <!-- Step 2.5 -->
+  <circle cx="60" cy="256" r="11" fill="#2563eb"/>
+  <rect x="92" y="236" width="540" height="42" rx="8" fill="#dbeafe" stroke="#2563eb"/>
+  <text x="106" y="254" font-size="12.5" fill="#1e3a8a" font-weight="700">Step 2.5　補漏歷史缺口</text>
+  <text x="106" y="271" font-size="10.5" fill="#334155">fill_price_gaps：以基準股建交易日曆，yfinance 補缺日（失敗僅警告）</text>
+  <rect x="668" y="240" width="212" height="34" rx="6" fill="#fff7ed" stroke="#fb923c"/>
+  <text x="680" y="261" font-size="10" fill="#9a3412">基準股 AAPL（台股 2330/.TW/.TWO）</text>
+
+  <!-- Step 3 / 2.6 分割 -->
+  <circle cx="60" cy="320" r="11" fill="#2563eb"/>
+  <rect x="92" y="296" width="540" height="50" rx="8" fill="#dbeafe" stroke="#2563eb"/>
+  <text x="106" y="316" font-size="12.5" fill="#1e3a8a" font-weight="700">Step 3　除權息/減資（分割）偵測</text>
+  <text x="106" y="333" font-size="10.5" fill="#334155">FinMind 還原權息價 vs DB 前一日收盤，差異 &gt;1% 者重抓 365 天</text>
+  <rect x="668" y="298" width="212" height="48" rx="6" fill="#fff7ed" stroke="#fb923c"/>
+  <text x="680" y="316" font-size="10" fill="#9a3412">Step 2.6：fresh 前一日 vs DB 比對，</text>
+  <text x="680" y="330" font-size="10" fill="#9a3412">受影響股先 DELETE 全部再重抓</text>
+  <text x="680" y="343" font-size="9.5" fill="#9a3412">（penny stock &lt;$1 不偵測）</text>
+
+  <!-- Step 2.7 美股獨有 -->
+  <circle cx="60" cy="384" r="11" fill="#fb923c"/>
+  <rect x="92" y="364" width="540" height="42" rx="8" fill="#fff7ed" stroke="#fb923c" stroke-dasharray="5 3"/>
+  <text x="106" y="382" font-size="12.5" fill="#c2410c" font-weight="700">Step 2.7　內部分割偵測　★ 美股獨有</text>
+  <text x="106" y="399" font-size="10.5" fill="#9a3412">掃 DB 自身相鄰價格跳動（scan_days=30），補前兩層盲點；白名單排除真實暴漲</text>
+
+  <!-- Step 4 大盤 -->
+  <circle cx="60" cy="448" r="11" fill="#2563eb"/>
+  <rect x="92" y="428" width="540" height="42" rx="8" fill="#dbeafe" stroke="#2563eb"/>
+  <text x="106" y="446" font-size="12.5" fill="#1e3a8a" font-weight="700">Step 4　抓大盤指數</text>
+  <text x="106" y="463" font-size="10.5" fill="#334155">TAIEX → market_index 表</text>
+  <rect x="668" y="432" width="212" height="34" rx="6" fill="#fff7ed" stroke="#fb923c"/>
+  <text x="680" y="453" font-size="10" fill="#9a3412">S&amp;P500；DB 已有當日則跳過下載</text>
+
+  <!-- Step 5 篩選 -->
+  <circle cx="60" cy="512" r="11" fill="#7c3aed"/>
+  <rect x="92" y="492" width="540" height="42" rx="8" fill="#ede9fe" stroke="#7c3aed"/>
+  <text x="106" y="510" font-size="12.5" fill="#5b21b6" font-weight="700">Step 5　篩選（VCP + 三線開花）</text>
+  <text x="106" y="527" font-size="10.5" fill="#334155">取 365 天歷史、算大盤報酬、過濾僅留 stock_info 內 → save_filter_results</text>
+
+  <!-- Step 6 匯出 -->
+  <circle cx="60" cy="576" r="11" fill="#059669"/>
+  <rect x="92" y="556" width="540" height="42" rx="8" fill="#d1fae5" stroke="#059669"/>
+  <text x="106" y="574" font-size="12.5" fill="#065f46" font-weight="700">Step 6　匯出 Google Sheet</text>
+  <text x="106" y="591" font-size="10.5" fill="#334155">含前一交易日結果做新/舊標記；VCP、三線、驗證三組</text>
+
+  <!-- Step 7 每日驗證 -->
+  <circle cx="60" cy="640" r="11" fill="#f59e0b"/>
+  <rect x="92" y="620" width="540" height="42" rx="8" fill="#fffbeb" stroke="#f59e0b"/>
+  <text x="106" y="638" font-size="12.5" fill="#b45309" font-weight="700">Step 7　每日自動驗證 DailyVerifier</text>
+  <text x="106" y="655" font-size="10.5" fill="#334155">6 項檢查；最低筆數門檻台股 1500</text>
+  <rect x="668" y="624" width="212" height="34" rx="6" fill="#fff7ed" stroke="#fb923c"/>
+  <text x="680" y="645" font-size="10" fill="#9a3412">最低筆數門檻 6500</text>
+
+  <!-- Step 8 客觀驗證 -->
+  <circle cx="60" cy="704" r="11" fill="#f59e0b"/>
+  <rect x="92" y="684" width="540" height="42" rx="8" fill="#fffbeb" stroke="#f59e0b"/>
+  <text x="106" y="702" font-size="12.5" fill="#b45309" font-weight="700">Step 8　客觀驗證 ObjectiveVerifier（L1~L4）</text>
+  <text x="106" y="719" font-size="10.5" fill="#334155">獨立資料源 + Sheet 回讀比對；失敗只記 warning 不中斷</text>
+
+  <!-- 收尾 -->
+  <circle cx="60" cy="768" r="11" fill="#1e293b"/>
+  <rect x="92" y="744" width="788" height="50" rx="8" fill="#1e293b"/>
+  <text x="106" y="764" font-size="12.5" fill="#fff" font-weight="700">收尾　錯誤日誌 → Sheet　·　DB 備份 → GitHub Release　·　觸發 Deploy Site → export_to_json_v2 → GitHub Pages</text>
+  <text x="106" y="782" font-size="10" fill="#cbd5e1">台股備份至 db-backup、美股備份至 us-db-backup；同市場 workflow 不可平行跑（會互相覆蓋備份）</text>
+
+  <!-- 連接箭頭 -->
+  <line x1="60" y1="75" x2="60" y2="117" stroke="#cbd5e1" stroke-width="2" marker-end="url(#arrow8)"/>
+  <line x1="60" y1="139" x2="60" y2="181" stroke="#cbd5e1" stroke-width="2" marker-end="url(#arrow8)"/>
+  <line x1="60" y1="203" x2="60" y2="245" stroke="#cbd5e1" stroke-width="2" marker-end="url(#arrow8)"/>
+  <line x1="60" y1="267" x2="60" y2="309" stroke="#cbd5e1" stroke-width="2" marker-end="url(#arrow8)"/>
+  <line x1="60" y1="331" x2="60" y2="373" stroke="#cbd5e1" stroke-width="2" marker-end="url(#arrow8)"/>
+  <line x1="60" y1="395" x2="60" y2="437" stroke="#cbd5e1" stroke-width="2" marker-end="url(#arrow8)"/>
+  <line x1="60" y1="459" x2="60" y2="501" stroke="#cbd5e1" stroke-width="2" marker-end="url(#arrow8)"/>
+  <line x1="60" y1="523" x2="60" y2="565" stroke="#cbd5e1" stroke-width="2" marker-end="url(#arrow8)"/>
+  <line x1="60" y1="587" x2="60" y2="629" stroke="#cbd5e1" stroke-width="2" marker-end="url(#arrow8)"/>
+  <line x1="60" y1="651" x2="60" y2="693" stroke="#cbd5e1" stroke-width="2" marker-end="url(#arrow8)"/>
+  <line x1="60" y1="715" x2="60" y2="757" stroke="#cbd5e1" stroke-width="2" marker-end="url(#arrow8)"/>
+</svg>

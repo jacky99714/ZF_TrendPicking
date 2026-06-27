@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 410" width="900" height="410">
+  <rect x="0" y="0" width="900" height="410" fill="#f8fafc" rx="12"/>
+  <line x1="450" y1="44" x2="450" y2="392" stroke="#cbd5e1" stroke-dasharray="5 4"/>
+
+  <!-- 台股標題 -->
+  <rect x="40" y="16" width="390" height="26" rx="6" fill="#0891b2"/>
+  <text x="235" y="34" text-anchor="middle" font-size="13" fill="#fff" font-weight="700">🇹🇼 data/zf_trend.db · 4 表</text>
+  <!-- 美股標題 -->
+  <rect x="470" y="16" width="390" height="26" rx="6" fill="#4f46e5"/>
+  <text x="665" y="34" text-anchor="middle" font-size="13" fill="#fff" font-weight="700">🇺🇸 data/zf_trend_us.db · 5 表</text>
+
+  <!-- 台股表 -->
+  <rect x="40" y="50" width="390" height="56" rx="8" fill="#fff" stroke="#67e8f9"/>
+  <text x="52" y="70" font-size="12.5" fill="#155e75" font-weight="700">stock_info</text>
+  <text x="52" y="88" font-size="10.5" fill="#334155">stock_id(PK) · stock_name · industry_category(2)</text>
+  <text x="52" y="102" font-size="10.5" fill="#334155">stock_type（twse/tpex，供 TradingView 連結）</text>
+
+  <rect x="40" y="112" width="390" height="56" rx="8" fill="#fff" stroke="#67e8f9"/>
+  <text x="52" y="132" font-size="12.5" fill="#155e75" font-weight="700">daily_price</text>
+  <text x="52" y="150" font-size="10.5" fill="#334155">stock_id · date · OHLC · volume</text>
+  <text x="52" y="164" font-size="10.5" fill="#64748b">UNIQUE(stock_id, date)</text>
+
+  <rect x="40" y="174" width="390" height="44" rx="8" fill="#fff" stroke="#67e8f9"/>
+  <text x="52" y="194" font-size="12.5" fill="#155e75" font-weight="700">market_index</text>
+  <text x="52" y="211" font-size="10.5" fill="#334155">date(UNIQUE) · taiex（加權指數，單欄）</text>
+
+  <rect x="40" y="224" width="390" height="160" rx="8" fill="#fff" stroke="#67e8f9"/>
+  <text x="52" y="244" font-size="12.5" fill="#155e75" font-weight="700">filter_result</text>
+  <text x="52" y="262" font-size="10.5" fill="#334155">filter_date · filter_type（vcp / sanxian）· stock_id</text>
+  <text x="52" y="280" font-size="10.5" fill="#7c3aed" font-weight="600">VCP 欄位：return_20d · is_strong_list · is_new_high_list</text>
+  <text x="52" y="298" font-size="10.5" fill="#0891b2" font-weight="600">三線欄位：today_price · second_high_55d · gap_ratio</text>
+  <text x="52" y="316" font-size="10.5" fill="#059669" font-weight="600">indicator_json（Text）→ 前端 tooltip 指標</text>
+  <text x="52" y="340" font-size="10" fill="#64748b">同一張表用 filter_type 區分兩種策略，</text>
+  <text x="52" y="356" font-size="10" fill="#64748b">各策略只填自己那組欄位，另一組留空。</text>
+  <text x="52" y="374" font-size="10" fill="#64748b">INDEX(filter_date, filter_type)</text>
+
+  <!-- 美股表 -->
+  <rect x="470" y="50" width="390" height="62" rx="8" fill="#fff" stroke="#a5b4fc"/>
+  <text x="482" y="70" font-size="12.5" fill="#3730a3" font-weight="700">us_stock_info</text>
+  <text x="482" y="88" font-size="10.5" fill="#334155">stock_id(PK,20) · stock_name(200，公司全名)</text>
+  <text x="482" y="104" font-size="10.5" fill="#dc2626">＋ exchange · sector · industry · market_cap · etf_flag</text>
+
+  <rect x="470" y="118" width="390" height="50" rx="8" fill="#fff" stroke="#a5b4fc"/>
+  <text x="482" y="138" font-size="12.5" fill="#3730a3" font-weight="700">us_daily_price</text>
+  <text x="482" y="156" font-size="10.5" fill="#334155">stock_id · date · OHLC · volume <tspan fill="#dc2626" font-weight="600">＋ adj_close</tspan></text>
+
+  <rect x="470" y="174" width="390" height="44" rx="8" fill="#fff" stroke="#a5b4fc"/>
+  <text x="482" y="194" font-size="12.5" fill="#3730a3" font-weight="700">us_market_index</text>
+  <text x="482" y="211" font-size="10.5" fill="#334155">date · <tspan fill="#dc2626" font-weight="600">sp500 · dow_jones · nasdaq（三指數）</tspan></text>
+
+  <rect x="470" y="224" width="390" height="74" rx="8" fill="#fff" stroke="#a5b4fc"/>
+  <text x="482" y="244" font-size="12.5" fill="#3730a3" font-weight="700">us_filter_result</text>
+  <text x="482" y="262" font-size="10.5" fill="#334155">結構同台股，indicator_json 同樣存在</text>
+  <text x="482" y="280" font-size="10.5" fill="#dc2626">產業欄位以 exchange + sector 取代 industry_category</text>
+
+  <rect x="470" y="304" width="390" height="80" rx="8" fill="#fff7ed" stroke="#fb923c" stroke-width="1.5"/>
+  <text x="482" y="324" font-size="12.5" fill="#c2410c" font-weight="700">us_anomaly_whitelist　★ 美股獨有</text>
+  <text x="482" y="342" font-size="10.5" fill="#334155">stock_id · anomaly_date · prev_close · today_close · ratio</text>
+  <text x="482" y="360" font-size="10.5" fill="#334155">記錄「已驗證為真實暴漲」的股票/日期，</text>
+  <text x="482" y="377" font-size="10.5" fill="#334155">避免分割偵測對真實波動（如 BIRD 6x）重複誤判。</text>
+</svg>

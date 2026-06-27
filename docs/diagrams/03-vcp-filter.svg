@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500" width="900" height="500">
+  <defs>
+    <marker id="arrow3" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="900" height="500" fill="#f8fafc" rx="12"/>
+
+  <!-- 入口 -->
+  <rect x="350" y="18" width="200" height="40" rx="20" fill="#1e293b"/>
+  <text x="450" y="43" text-anchor="middle" font-size="13" fill="#fff" font-weight="700">price_df（365 天）</text>
+  <line x1="450" y1="58" x2="450" y2="80" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow3)"/>
+
+  <!-- 前置 -->
+  <rect x="230" y="82" width="440" height="56" rx="10" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="450" y="104" text-anchor="middle" font-size="12.5" fill="#5b21b6" font-weight="700">prepare_vcp_data() 均線前置</text>
+  <text x="450" y="123" text-anchor="middle" font-size="10" fill="#334155">SMA50/150/200 · MA200斜率 · return_20d · high_5d · high_260d</text>
+
+  <!-- 兩條件分支 -->
+  <line x1="450" y1="138" x2="450" y2="156" stroke="#94a3b8" stroke-width="2"/>
+  <line x1="240" y1="156" x2="660" y2="156" stroke="#94a3b8" stroke-width="2"/>
+  <line x1="240" y1="156" x2="240" y2="178" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow3)"/>
+  <line x1="660" y1="156" x2="660" y2="178" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow3)"/>
+
+  <!-- 強勢清單 -->
+  <rect x="50" y="180" width="380" height="96" rx="10" fill="#fff" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="240" y="202" text-anchor="middle" font-size="13" fill="#6d28d9" font-weight="700">強勢清單 _filter_strong_list</text>
+  <text x="68" y="226" font-size="11" fill="#334155">① 多頭排列：close &gt; MA50 &gt; MA150 &gt; MA200</text>
+  <text x="68" y="246" font-size="11" fill="#334155">② 趨勢向上：MA200 斜率(20日) &gt; 0</text>
+  <text x="68" y="266" font-size="10.5" fill="#64748b">（皆用收盤價；NaN 一律視為不通過）</text>
+
+  <!-- 新高清單 -->
+  <rect x="470" y="180" width="380" height="96" rx="10" fill="#fff" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="660" y="202" text-anchor="middle" font-size="13" fill="#6d28d9" font-weight="700">新高清單 _filter_new_high_list</text>
+  <text x="488" y="226" font-size="11" fill="#334155">① 接近 52 週新高（用最高價）：</text>
+  <text x="500" y="246" font-size="11" fill="#334155">| high_5d / high_260d − 1 | ≤ 1%（容差）</text>
+  <text x="488" y="266" font-size="10.5" fill="#64748b">（high_260d = 近 260 交易日最高價）</text>
+
+  <!-- 聯集 -->
+  <line x1="240" y1="276" x2="240" y2="300" stroke="#94a3b8" stroke-width="2"/>
+  <line x1="660" y1="276" x2="660" y2="300" stroke="#94a3b8" stroke-width="2"/>
+  <line x1="240" y1="300" x2="660" y2="300" stroke="#94a3b8" stroke-width="2"/>
+  <rect x="385" y="288" width="130" height="34" rx="17" fill="#7c3aed"/>
+  <text x="450" y="310" text-anchor="middle" font-size="13" fill="#fff" font-weight="700">∪ 聯集</text>
+  <line x1="450" y1="322" x2="450" y2="344" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow3)"/>
+
+  <!-- 共同遮罩 -->
+  <rect x="210" y="346" width="480" height="74" rx="10" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.5"/>
+  <text x="450" y="368" text-anchor="middle" font-size="12.5" fill="#854d0e" font-weight="700">AND 共同遮罩：打敗大盤 beat_market</text>
+  <text x="450" y="389" text-anchor="middle" font-size="11" fill="#334155">return_20d &gt; 大盤 20 日報酬</text>
+  <text x="450" y="408" text-anchor="middle" font-size="11" fill="#334155">且 −0.9 &lt; return_20d &lt; 5.0（濾掉分割/合股未修正的異常）</text>
+  <line x1="450" y1="420" x2="450" y2="442" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow3)"/>
+
+  <!-- 輸出 -->
+  <rect x="270" y="444" width="360" height="44" rx="10" fill="#d1fae5" stroke="#059669" stroke-width="1.5"/>
+  <text x="450" y="466" text-anchor="middle" font-size="12" fill="#065f46" font-weight="700">輸出：stock_id · close · return_20d</text>
+  <text x="450" y="482" text-anchor="middle" font-size="10.5" fill="#047857">· is_strong · is_new_high（同股可同時為 True）</text>
+</svg>

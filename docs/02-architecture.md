@@ -53,7 +53,7 @@
 │   us_moving_average.py│   verify_data.py          │
 ├──────────────────────┴──────────────────────────┤
 │                   資料層                          │
-│         data/database.py (台股 SQLite)            │
+│         data/sqlite_database.py (台股 SQLite)     │
 │         data/us_database.py (美股 SQLite)         │
 │         data/models.py / data/us_models.py       │
 ├─────────────────────────────────────────────────┤
@@ -61,7 +61,9 @@
 │   api/hybrid_client.py (FinMind + yfinance)      │
 │   api/finmind_client.py                          │
 │   api/yfinance_client.py                         │
+│   api/us_stock_client.py (USStockClientBase)     │
 │   api/us_stock_client_free.py (NASDAQ FTP + yf)  │
+│   api/us_stock_client_paid.py (付費版預留)        │
 │   api/rate_limiter.py                            │
 ├─────────────────────────────────────────────────┤
 │                   工具層                          │
@@ -69,8 +71,10 @@
 │   utils/us_trading_calendar.py                   │
 │   utils/split_detector.py                        │
 │   utils/us_split_detector.py                     │
+│   utils/internal_split_detector.py               │
 │   utils/price_gap_filler.py                      │
 │   utils/daily_verifier.py                        │
+│   utils/objective_verifier.py                    │
 │   utils/performance.py                           │
 ├─────────────────────────────────────────────────┤
 │                   設定層                          │
@@ -107,11 +111,11 @@
 |------|------|------|
 | `api/finmind_client.py` | `FinMindClient` | FinMind API 存取：股票清單、股價、大盤指數。含限流（600次/hr）和 yfinance 補齊功能 |
 | `api/yfinance_client.py` | `YFinanceClient` | 免費 yfinance 客戶端，含自適應批次下載器。支援台股代號格式（.TW/.TWO），從 TWSE/TPEX 爬取股票清單 |
-| `api/hybrid_client.py` | `HybridClient` | **台股混合客戶端**。主要來源 FinMind，備援 yfinance。支援三種模式：完整備援、部分補齊、自動切換 |
+| `api/hybrid_client.py` | `HybridClient` | **台股混合客戶端**。主要來源 FinMind，備援 yfinance。兩種備援處理：完整備援（主源失敗整批改 yfinance）與部分補齊（主源部分成功，只補 missing），並自動依條件切換 |
 | `api/us_stock_client.py` | `USStockClientBase` | 美股 API 抽象基底類別，定義統一介面 |
 | `api/us_stock_client_free.py` | `USStockClientFree` | 美股免費版（NASDAQ FTP + yfinance）。含批次下載、多執行緒 sector/industry 取得 |
-| `api/us_stock_client_paid.py` | (預留) | 付費版框架，支援 Polygon.io、EODHD、Twelve Data |
-| `api/rate_limiter.py` | `TokenBucketRateLimiter`, `RetryHandler` | Token Bucket 限流 + 5XX/429 自動重試 |
+| `api/us_stock_client_paid.py` | `USStockClientPolygon` 等 4 類別 | 付費版框架，支援 Polygon.io、EODHD、Twelve Data、Alpha Vantage（`USStockClientPolygon` / `USStockClientEODHD` / `USStockClientTwelveData` / `USStockClientAlphaVantage`） |
+| `api/rate_limiter.py` | `RateLimiter`, `RetryHandler` | Token Bucket 限流 + 5XX/429 自動重試 |
 
 #### HybridClient 備援機制流程
 
@@ -130,8 +134,9 @@ get_stock_price() 呼叫
 | 檔案 | 類別 | 職責 |
 |------|------|------|
 | `data/models.py` | `StockInfo`, `DailyPrice`, `MarketIndex`, `FilterResult` | 台股 SQLAlchemy ORM 模型（`Base`） |
-| `data/us_models.py` | `USStockInfo`, `USDailyPrice`, `USMarketIndex`, `USFilterResult` | 美股 SQLAlchemy ORM 模型（`USBase`，獨立） |
-| `data/database.py` | `Database` | 台股資料庫操作：CRUD、批次寫入、UPSERT |
+| `data/us_models.py` | `USStockInfo`, `USDailyPrice`, `USMarketIndex`, `USFilterResult`, `USAnomalyWhitelist` | 美股 SQLAlchemy ORM 模型（`USBase`，獨立） |
+| `data/sqlite_database.py` | `SQLiteDatabase` | 台股資料庫操作（runtime 實際使用）：CRUD、批次寫入、UPSERT、WAL 模式 |
+| `data/database.py` | `Database` | 舊版 PostgreSQL 實作，保留相容性、runtime 不再使用 |
 | `data/us_database.py` | `USSQLiteDatabase` | 美股資料庫操作：WAL 模式、獨立 CRUD |
 
 ### 3.5 計算模組 (`calculators/`)
@@ -149,8 +154,8 @@ get_stock_price() 呼叫
 
 | 檔案 | 類別 | 職責 |
 |------|------|------|
-| `tasks/daily_task.py` | `DailyTask` | 台股每日任務：抓股價 → **補漏** → 減資偵測 → 抓大盤 → 篩選 → 匯出 Sheet → 驗證 |
-| `tasks/us_daily_task.py` | `USDailyTask` | 美股每日任務：抓股價 → **補漏** → **分割偵測** → 抓大盤 → 篩選 → 匯出 Sheet → 驗證 |
+| `tasks/daily_task.py` | `DailyTask` | 台股每日任務：抓股價 → **補漏** → 除權息/減資偵測（比對未調整價 vs FinMind 還原權息價，差異 >1% 重抓）→ 抓大盤 → 篩選 → 匯出 Sheet → 驗證 |
+| `tasks/us_daily_task.py` | `USDailyTask` | 美股每日任務：抓股價 → **補漏** → **分割偵測** → **內部分割偵測** → 抓大盤 → 篩選 → 匯出 Sheet → 每日驗證 → 客觀驗證 |
 | `tasks/monthly_task.py` | `MonthlyTask` | 台股每月任務：更新股票清單 → 匯出主檔 Sheet |
 | `tasks/us_monthly_task.py` | `USMonthlyTask` | 美股每月任務：更新股票清單 → 補充 sector/industry → 匯出主檔 Sheet |
 
@@ -169,6 +174,7 @@ get_stock_price() 呼叫
 | `utils/us_trading_calendar.py` | `USMarketCalendar` | 美股交易日曆（2024-2026 聯邦假日+提前收盤日） |
 | `utils/split_detector.py` | `SplitDetector` | 台股除權息偵測：用 FinMind 還原價比對 DB 前日價格 |
 | `utils/us_split_detector.py` | `USSplitDetector` | 美股分割/合股偵測：比對 DB 與 yfinance 歷史價格，自動標記需重新下載的股票 |
+| `utils/internal_split_detector.py` | `detect_and_fix_internal_splits()` | 第三層分割偵測：掃描 DB 相鄰收盤價跳動（>1.5x/<0.67x），刪除重抓 365 天，再跳動則寫入 `us_anomaly_whitelist` 白名單 |
 | `utils/price_gap_filler.py` | `fill_price_gaps()` | 股價缺漏自動補齊：用基準股票建交易日曆，逐股比對並從 yfinance 下載缺日 |
 | `utils/daily_verifier.py` | `DailyVerifier` | 每日自動驗證：檢查股價筆數、篩選結果、大盤報酬等 6 項指標 |
 | `utils/objective_verifier.py` | `ObjectiveVerifier` | 四層客觀驗證：L1 價格準確性、L2 獨立重算、L3 Sheet 回讀、L4 歷史一致性。結果寫入驗證 Sheet「驗證日誌」分頁 |
@@ -204,6 +210,8 @@ get_stock_price() 呼叫
 | `scripts/backfill_all_trading_days_us.py` | 美股：補齊所有交易日的篩選結果 |
 | `scripts/backfill_fridays.py` | 台股：補齊星期五的篩選結果（含 `run_filters_for_date`） |
 | `scripts/backfill_fridays_us.py` | 美股：補齊星期五的篩選結果 |
+| `scripts/backfill_tw_prices.py` | 台股：股價回補（v1） |
+| `scripts/backfill_tw_prices_v2.py` | 台股：股價回補（v2，改進版） |
 | `scripts/backfill_us_prices.py` | 美股：回溯下載歷史股價至 2024-05 |
 | `scripts/fix_missing_indicators.py` | 修復缺失的 `indicator_json`（台股 `--tw` / 美股 `--us`） |
 | `scripts/verify_data.py` | 4 層資料驗證：完整性、值合理性、新/舊邏輯、篩選準確度 |
@@ -279,7 +287,9 @@ get_stock_price() 呼叫
 [部署到 GitHub Pages]
 ```
 
-### 4.2 美股每日任務額外流程：分割偵測
+### 4.2 美股每日任務額外流程：分割偵測 + 內部分割偵測
+
+**Step 2.6：分割偵測（比對 yfinance）**
 
 ```
 [下載當日+前日股價]
@@ -298,6 +308,24 @@ get_stock_price() 呼叫
     │
     ▼
 [覆寫 DB 中的舊資料]
+```
+
+**Step 2.7：內部分割偵測（DB 自身相鄰價格跳動，補足前兩層盲點）**
+
+```
+[掃描 DB 相鄰收盤價跳動 (>1.5x / <0.67x)]
+          │
+          ▼
+[過濾 us_anomaly_whitelist 白名單] ──白名單──> [跳過]
+          │ 非白名單
+          ▼
+[DELETE 該股全部歷史 + 重抓 365 天]
+          │
+          ▼
+[再次掃描相鄰跳動]
+    │仍跳動        │已正常
+    ▼             ▼
+[真實波動 → 寫入白名單]  [修正完成]
 ```
 
 ### 4.3 每月任務流程
@@ -334,11 +362,13 @@ get_stock_price() 呼叫
 | **API 客戶端** | `HybridClient`（FinMind + yfinance） | `USStockClientFree`（NASDAQ FTP + yfinance） |
 | **股票清單來源** | FinMind `TaiwanStockInfo` | NASDAQ FTP `nasdaqtraded.txt` |
 | **股價來源** | FinMind（主）+ yfinance（備援） | yfinance（唯一） |
-| **大盤指數** | 加權指數 TAIEX | S&P 500 (^GSPC) |
+| **大盤指數** | 加權指數 TAIEX（單一） | S&P 500 + 道瓊 + NASDAQ 三大指數（但 VCP 篩選報酬率僅採 S&P 500 ^GSPC） |
 | **股價計算** | 使用**未調整股價**（與券商一致） | 使用**調整後股價**（adj_close） |
 | **股票數量** | ~1,700 檔 | ~8,000 檔 |
-| **批次策略** | 逐檔查詢（FinMind 限制） | 批次 100 檔、間隔 5 秒、4 workers |
+| **批次策略** | 逐檔查詢（FinMind 限制） | 批次 40 檔、間隔 15 秒、序列下載（`US_MAX_WORKERS=2` 僅用於 sector/industry 抓取） |
 | **分割偵測** | 有（`SplitDetector`，FinMind 還原價） | 有（`USSplitDetector`，yfinance 比對） |
+| **異常白名單表** | 無 | `us_anomaly_whitelist`（內部分割偵測白名單） |
+| **股價 adj_close 欄** | 無 | 有（DB 儲存還原後收盤價） |
 | **產業分類補充** | FinMind 已包含 | 需額外從 yfinance 取得 |
 | **代號格式** | 純數字（如 2330） | 英文（如 AAPL），最長 20 字元 |
 | **Sheet 數量** | 共用公司主檔 + 2 個篩選 Sheet | 3 個獨立 Sheet |
