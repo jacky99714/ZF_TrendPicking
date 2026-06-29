@@ -493,19 +493,29 @@ class DailyTask:
         # 輸出所有股票的計算數據供驗證
         return df.to_dict("records")
 
-    def _get_prev_stock_ids(self, target_date: date, filter_type: str) -> set:
-        """取得前一交易日的篩選結果股票代號集合"""
-        prev_date = TradingCalendar.get_previous_trading_day(target_date)
-        if not prev_date:
-            return set()
-        try:
-            df = self.db.get_filter_results(filter_type, prev_date)
-            if df.empty:
-                return set()
-            return set(df["stock_id"].tolist())
-        except Exception as e:
-            logger.warning(f"取得前一交易日 {filter_type} 結果失敗: {e}")
-            return set()
+    def _get_recent_stock_ids(
+        self, target_date: date, filter_type: str, lookback: int = 20
+    ) -> set:
+        """取得近 lookback 個交易日（不含當天）出現過的篩選結果股票代號聯集
+
+        用於新/舊股票標記（lookback 單位為「交易日」）：
+        - 在此集合內 → 近 lookback 交易日曾出現過（灰底，舊股）
+        - 不在此集合 → 近 lookback 交易日首次出現（白底，新股）
+        """
+        # 20 交易日約 28 日曆天，往前抓 2 倍日曆範圍以確保湊滿 lookback 個交易日
+        start = target_date - timedelta(days=lookback * 2)
+        end = target_date - timedelta(days=1)
+        recent_days = TradingCalendar.get_trading_days_in_range(start, end)[-lookback:]
+
+        recent_ids: set = set()
+        for d in recent_days:
+            try:
+                df = self.db.get_filter_results(filter_type, d)
+                if not df.empty:
+                    recent_ids.update(df["stock_id"].tolist())
+            except Exception as e:
+                logger.warning(f"取得 {d} {filter_type} 結果失敗: {e}")
+        return recent_ids
 
     def _export_to_sheet(
         self,
@@ -519,20 +529,20 @@ class DailyTask:
             logger.warning("Google Sheet 未連線，跳過匯出")
             return
 
-        # 取得前一交易日的篩選結果（用於新/舊標記）
-        prev_vcp_ids = self._get_prev_stock_ids(target_date, "vcp")
-        prev_sanxian_ids = self._get_prev_stock_ids(target_date, "sanxian")
+        # 取得近 20 交易日出現過的股票（新/舊標記：近 20 交易日首次出現=新股白底）
+        recent_vcp_ids = self._get_recent_stock_ids(target_date, "vcp")
+        recent_sanxian_ids = self._get_recent_stock_ids(target_date, "sanxian")
 
         # 匯出 VCP
         if vcp_results:
             self.exporter.export_vcp(
-                vcp_results, target_date, prev_stock_ids=prev_vcp_ids
+                vcp_results, target_date, prev_stock_ids=recent_vcp_ids
             )
 
         # 匯出三線開花
         if sanxian_results:
             self.exporter.export_sanxian(
-                sanxian_results, target_date, prev_stock_ids=prev_sanxian_ids
+                sanxian_results, target_date, prev_stock_ids=recent_sanxian_ids
             )
 
         # 匯出驗證資料

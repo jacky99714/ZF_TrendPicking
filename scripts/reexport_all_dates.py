@@ -214,19 +214,29 @@ def get_db_filter_dates(db: SQLiteDatabase, since: str = "") -> list[date]:
 # ==================== Step 3: 重新計算並匯出 ====================
 
 
-def _get_prev_stock_ids(db: SQLiteDatabase, target_date: date, filter_type: str) -> set:
-    """取得前一交易日的篩選結果股票代號集合"""
-    prev_date = TradingCalendar.get_previous_trading_day(target_date)
-    if not prev_date:
-        return set()
-    try:
-        df = db.get_filter_results(filter_type, prev_date)
-        if df.empty:
-            return set()
-        return set(df["stock_id"].tolist())
-    except Exception as e:
-        logger.warning(f"取得前一交易日 {filter_type} 結果失敗: {e}")
-        return set()
+def _get_recent_stock_ids(
+    db: SQLiteDatabase, target_date: date, filter_type: str, lookback: int = 20
+) -> set:
+    """取得近 lookback 個交易日（不含當天）出現過的篩選結果股票代號聯集
+
+    用於新/舊股票標記（lookback 單位為「交易日」）：
+    - 在此集合內 → 近 lookback 交易日曾出現過（灰底，舊股）
+    - 不在此集合 → 近 lookback 交易日首次出現（白底，新股）
+    """
+    # 20 交易日約 28 日曆天，往前抓 2 倍日曆範圍以確保湊滿 lookback 個交易日
+    start = target_date - timedelta(days=lookback * 2)
+    end = target_date - timedelta(days=1)
+    recent_days = TradingCalendar.get_trading_days_in_range(start, end)[-lookback:]
+
+    recent_ids: set = set()
+    for d in recent_days:
+        try:
+            df = db.get_filter_results(filter_type, d)
+            if not df.empty:
+                recent_ids.update(df["stock_id"].tolist())
+        except Exception as e:
+            logger.warning(f"取得 {d} {filter_type} 結果失敗: {e}")
+    return recent_ids
 
 
 def export_from_db(
@@ -248,9 +258,9 @@ def export_from_db(
     vcp_results = _df_to_export_dicts(vcp_df, "vcp") if not vcp_df.empty else []
     sanxian_results = _df_to_export_dicts(sanxian_df, "sanxian") if not sanxian_df.empty else []
 
-    # 取得前一交易日的篩選結果（用於新/舊標記）
-    prev_vcp_ids = _get_prev_stock_ids(db, target_date, "vcp")
-    prev_sanxian_ids = _get_prev_stock_ids(db, target_date, "sanxian")
+    # 取得近 20 交易日出現過的篩選結果（用於新/舊標記）
+    prev_vcp_ids = _get_recent_stock_ids(db, target_date, "vcp")
+    prev_sanxian_ids = _get_recent_stock_ids(db, target_date, "sanxian")
 
     # 匯出到 Google Sheet（帶重試）
     for attempt in range(3):
@@ -345,9 +355,9 @@ def reexport_date(
     db.save_filter_results(vcp_results, "vcp", target_date)
     db.save_filter_results(sanxian_results, "sanxian", target_date)
 
-    # 取得前一交易日的篩選結果（用於新/舊標記）
-    prev_vcp_ids = _get_prev_stock_ids(db, target_date, "vcp")
-    prev_sanxian_ids = _get_prev_stock_ids(db, target_date, "sanxian")
+    # 取得近 20 交易日出現過的篩選結果（用於新/舊標記）
+    prev_vcp_ids = _get_recent_stock_ids(db, target_date, "vcp")
+    prev_sanxian_ids = _get_recent_stock_ids(db, target_date, "sanxian")
 
     # 匯出到 Google Sheet（帶重試）
     for attempt in range(3):

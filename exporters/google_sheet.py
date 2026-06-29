@@ -320,7 +320,7 @@ class GoogleSheetExporter:
             data: VCP 篩選結果列表
             target_date: 篩選日期
             sheet_id: Sheet ID
-            prev_stock_ids: 前一交易日的 VCP 股票代號集合（用於標記新/舊）
+            prev_stock_ids: 先前出現過的（近 20 交易日聯集） VCP 股票代號集合（用於標記新/舊）
 
         Returns:
             是否成功
@@ -451,7 +451,7 @@ class GoogleSheetExporter:
             data: 三線開花篩選結果列表
             target_date: 篩選日期
             sheet_id: Sheet ID
-            prev_stock_ids: 前一交易日的三線開花股票代號集合（用於標記新/舊）
+            prev_stock_ids: 先前出現過的（近 20 交易日聯集）三線開花股票代號集合（用於標記新/舊）
 
         Returns:
             是否成功
@@ -589,7 +589,7 @@ class GoogleSheetExporter:
         Args:
             worksheet: gspread Worksheet 物件
             sorted_data: 已排序的資料列表
-            prev_stock_ids: 前一交易日的股票代號集合
+            prev_stock_ids: 先前出現過的（近 20 交易日聯集）股票代號集合
             col_count: 欄位數量
         """
         if not sorted_data:

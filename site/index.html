@@ -647,8 +647,9 @@
         // Pre-load latest month for quick date buttons
         if (INDEX.months.length > 0) {
           await loadMonth(INDEX.months[0]);
-          // Also preload previous month for new/old comparison
+          // 預載前兩個月供近 20 交易日新/舊比較
           if (INDEX.months.length > 1) loadMonth(INDEX.months[1]);
+          if (INDEX.months.length > 2) loadMonth(INDEX.months[2]);
         }
         updateDateUI();
         // 預設日期模式：自動查詢最新日期
@@ -700,14 +701,13 @@
     }
 
     async function ensureDateLoaded(dateStr) {
-      const month = dateStr.substring(0, 7);
-      if (!MONTH_CACHE[month] && INDEX.months.includes(month)) {
-        await loadMonth(month);
-      }
-      // Also ensure previous month for new/old comparison
-      const prevMonth = getPrevMonth(month);
-      if (prevMonth && !MONTH_CACHE[prevMonth] && INDEX.months.includes(prevMonth)) {
-        await loadMonth(prevMonth);
+      // 載入當月 + 前兩個月，確保近 20 交易日（最多跨前一月）的新/舊比較資料齊全
+      let m = dateStr.substring(0, 7);
+      for (let i = 0; i < 3; i++) {
+        if (m && !MONTH_CACHE[m] && INDEX.months.includes(m)) {
+          await loadMonth(m);
+        }
+        m = getPrevMonth(m);
       }
     }
 
@@ -923,9 +923,9 @@
       }
       const merged = Object.values(stockMap);
       // New/old
-      const prevStockIds = getPrevDateStockIds(dateStr);
+      const recentStockIds = getRecentStockIds(dateStr);
       for (const s of merged) {
-        s.isNew = !prevStockIds.has(s.stock_id);
+        s.isNew = !recentStockIds.has(s.stock_id);
         s._date = dateStr;
       }
       sortStocks(merged);
@@ -979,11 +979,20 @@
     }
 
     // === Helpers ===
-    function getPrevDateStockIds(dateStr) {
+    // 近 N 個交易日內出現過視為「舊股」，N 日內首次出現為「新股」
+    const NEW_STOCK_LOOKBACK = 20;
+
+    function getRecentStockIds(dateStr) {
       const idx = ALL_DATES.indexOf(dateStr);
-      const prevDate = (idx >= 0 && idx < ALL_DATES.length - 1) ? ALL_DATES[idx + 1] : null;
-      if (!prevDate || !DATE_INDEX[prevDate]) return new Set();
-      return new Set(DATE_INDEX[prevDate].map(e => e.stock_id));
+      if (idx < 0) return new Set();
+      // ALL_DATES 為降冪，dateStr 之後（idx+1 起）為更早的交易日，取近 N 個的聯集
+      const recentDates = ALL_DATES.slice(idx + 1, idx + 1 + NEW_STOCK_LOOKBACK);
+      const ids = new Set();
+      for (const d of recentDates) {
+        const entries = DATE_INDEX[d];
+        if (entries) for (const e of entries) ids.add(e.stock_id);
+      }
+      return ids;
     }
 
     function getFilteredStocksForDate(dateStr) {
@@ -1086,8 +1095,8 @@
 
     function renderAppearanceRow(a, stockId) {
       const tags = buildTags(a, a.date, stockId);
-      const prevIds = getPrevDateStockIds(a.date);
-      const isNew = prevIds.size === 0 || !prevIds.has(stockId);
+      const recentIds = getRecentStockIds(a.date);
+      const isNew = recentIds.size === 0 || !recentIds.has(stockId);
       const newOldCls = isNew ? 'is-new' : 'is-old';
       const newOldLabel = isNew ? '<span class="new-old-label is-new">新</span>' : '<span class="new-old-label is-old">舊</span>';
       let details = '';
