@@ -1,6 +1,10 @@
 # 憑證（絕對不要上傳）
 credentials.json
 .env
+.env.*
+!.env.example
+# 多環境憑證（credentials.self.json / credentials.client.json 等）
+credentials.*.json
 
 # 資料庫
 data/*.db

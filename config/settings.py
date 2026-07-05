@@ -11,8 +11,13 @@ from dotenv import load_dotenv
 # 專案根目錄
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# 載入 .env 檔案
-load_dotenv(BASE_DIR / ".env")
+# 載入環境變數檔案
+# 多環境支援：設 APP_ENV=client 則讀 .env.client；未設或找不到則回退讀 .env（向後相容）
+_app_env = os.getenv("APP_ENV", "").strip()
+_env_file = BASE_DIR / f".env.{_app_env}" if _app_env else BASE_DIR / ".env"
+if not _env_file.exists():
+    _env_file = BASE_DIR / ".env"
+load_dotenv(_env_file)
 
 # ==================== 資料庫設定 ====================
 # SQLite 資料庫路徑
