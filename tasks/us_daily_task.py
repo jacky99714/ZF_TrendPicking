@@ -707,6 +707,20 @@ class USDailyTask:
                 market_return
             )
 
+            # 清理驗證 Sheet 過舊的每日明細分頁（保留最近 10 天的 YYMMDD_VCP/三線；
+            # 「驗證日誌」等固定分頁一律保留）。刻意放在每日任務的匯出路徑——
+            # reexport/backfill 走別的入口不會觸發，避免誤刪正在補的歷史分頁。
+            try:
+                from config.us_settings import US_SHEET_IDS
+                from utils.verification_cleaner import cleanup_verification_tabs
+
+                vsheet_id = US_SHEET_IDS.get("verification")
+                if vsheet_id and self.exporter.client:
+                    ss = self.exporter.client.open_by_key(vsheet_id)
+                    cleanup_verification_tabs(ss, keep_days=10)
+            except Exception as e:
+                logger.warning(f"驗證分頁清理失敗（不影響主流程）: {e}")
+
 
 def run_us_daily_task(target_date: Optional[date] = None) -> dict:
     """
