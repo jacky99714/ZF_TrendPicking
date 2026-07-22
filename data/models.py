@@ -53,6 +53,16 @@ class StockInfo(Base):
     stock_type: Mapped[Optional[str]] = mapped_column(
         String(20), nullable=True, comment="股票類型 (twse/tpex)"
     )
+    # 自訂欄位（由 Google Sheet「自訂產業連結」分頁每日同步，每月更新不覆蓋）
+    custom_industry1: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True, comment="自訂產業別1（覆蓋顯示用）"
+    )
+    custom_industry2: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True, comment="自訂產業別2（覆蓋顯示用）"
+    )
+    custom_link: Mapped[Optional[str]] = mapped_column(
+        String(500), nullable=True, comment="自訂連結"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), comment="建立時間"
     )

@@ -440,6 +440,73 @@ class USStockClientFree(USStockClientBase):
             logger.error(f"API 健康檢查失敗: {e}")
             return False
 
+    # 判斷交易日用的指標股。用「多檔」而非單檔：單一個股在正常交易日也可能
+    # 0 成交（停牌），只有「全部都 0 成交」才是全市場休市。
+    DEFAULT_REF_STOCKS = ["AAPL", "MSFT", "NVDA", "JPM", "KO"]
+
+    def get_latest_trading_date(
+        self,
+        ref_stocks: Optional[list[str]] = None,
+        lookback_days: int = 10,
+    ) -> Optional[date]:
+        """查詢 yfinance 實際有交易的最新交易日（多檔指標股投票）。
+
+        判定規則：某日只要**任一檔指標股 Volume > 0**，就算交易日；
+        **全部指標股都 0 成交**才判定為休市日。
+
+        yfinance 會為休市日捏造資料（台股 2026-07-10 颱風休市卻有 OHLC，
+        破綻是 Volume=0），美股同樣不能無條件採信。但也不能只看單一檔——
+        個股停牌時 Volume 也會是 0，會把真實交易日誤殺。故用多檔投票。
+
+        真實交易日即使 Close 還是 NaN（盤中/未結算），Volume 仍然 > 0。
+
+        Args:
+            ref_stocks: 指標股清單（預設大型股）
+            lookback_days: 往前查幾個日曆天（需涵蓋連假）
+
+        Returns:
+            最新「有實際成交」的交易日；查不到回傳 None（由呼叫端 fallback）
+        """
+        import yfinance as yf
+
+        stocks = ref_stocks or self.DEFAULT_REF_STOCKS
+        start = date.today() - timedelta(days=lookback_days)
+        end = date.today() + timedelta(days=1)
+
+        traded_dates: set[date] = set()
+        ok_count = 0
+
+        for ticker in stocks:
+            try:
+                hist = yf.Ticker(ticker).history(
+                    start=start, end=end, auto_adjust=False
+                )
+            except Exception as e:
+                logger.warning(f"yfinance 指標股 {ticker} 查詢失敗: {e}")
+                continue
+
+            if hist is None or hist.empty or "Volume" not in hist.columns:
+                continue
+
+            ok_count += 1
+            traded = hist[hist["Volume"].fillna(0) > 0]
+            for ts in traded.index:
+                traded_dates.add(ts.date() if hasattr(ts, "date") else ts)
+
+        if not ok_count:
+            logger.warning("yfinance 所有指標股都查不到資料")
+            return None
+        if not traded_dates:
+            logger.warning("yfinance 指標股近期都沒有成交紀錄（無法判斷交易日）")
+            return None
+
+        latest = max(traded_dates)
+        logger.info(
+            f"美股最新交易日 = {latest}"
+            f"（{ok_count}/{len(stocks)} 檔指標股可用，已排除 0 成交的休市日）"
+        )
+        return latest
+
     def get_stats(self) -> dict:
         """取得 API 使用統計"""
         return {

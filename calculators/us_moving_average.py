@@ -140,6 +140,20 @@ class USMovingAverageCalculator:
         return df
 
     @staticmethod
+    def calculate_prior_high(
+        df: pd.DataFrame,
+        period: int,
+        high_column: str = "high_price"
+    ) -> pd.DataFrame:
+        """計算近 period 交易日「不含當天」的最高價（供突破新高判斷）"""
+        df = df.copy().sort_values(["stock_id", "date"])
+        col = f"high_{period}d_prior"
+        df[col] = df.groupby("stock_id")[high_column].transform(
+            lambda x: x.rolling(window=period, min_periods=1).max().shift(1)
+        )
+        return df
+
+    @staticmethod
     def calculate_returns(
         df: pd.DataFrame,
         periods: list[int],
@@ -295,8 +309,9 @@ class USMovingAverageCalculator:
         # 計算 20 日報酬率
         df = cls.calculate_returns(df, [20])
 
-        # 計算 5 日高點和 52 週高點
-        df = cls.calculate_high_low(df, [5, 260])
+        # 計算 5 日 / 250 日 / 52 週高低點
+        # high_5d 與 high_250d 供新高判斷（近5日高==近250日高）；high_260d 供舊驗證欄位相容
+        df = cls.calculate_high_low(df, [5, 250, 260])
 
         logger.info("美股 VCP 計算資料準備完成")
         return df
@@ -328,6 +343,9 @@ class USMovingAverageCalculator:
 
         # 計算 55 日次高價
         df = cls.calculate_second_high(df, period=55)
+
+        # 計算 20 日報酬率（供前端顯示，與 VCP 一致）
+        df = cls.calculate_returns(df, [20])
 
         logger.info("美股三線開花計算資料準備完成")
         return df

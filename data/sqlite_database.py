@@ -87,6 +87,17 @@ class SQLiteDatabase:
                 conn.commit()
                 logger.info("Schema 遷移: 已添加 industry_category2 欄位")
 
+            # 自訂欄位（Sheet 同步用，每月更新不覆蓋）
+            for col, ddl in (
+                ("custom_industry1", "ALTER TABLE stock_info ADD COLUMN custom_industry1 VARCHAR(50)"),
+                ("custom_industry2", "ALTER TABLE stock_info ADD COLUMN custom_industry2 VARCHAR(50)"),
+                ("custom_link", "ALTER TABLE stock_info ADD COLUMN custom_link VARCHAR(500)"),
+            ):
+                if col not in columns:
+                    conn.execute(text(ddl))
+                    conn.commit()
+                    logger.info(f"Schema 遷移: 已添加 {col} 欄位")
+
     def drop_tables(self):
         """刪除所有資料表（危險操作）"""
         Base.metadata.drop_all(self.engine)
@@ -158,6 +169,34 @@ class SQLiteDatabase:
             query = session.query(StockInfo)
             df = pd.read_sql(query.statement, session.bind)
         return df
+
+    def replace_custom_overrides(self, overrides: dict) -> int:
+        """以 Sheet 為準覆寫自訂欄位（產業別1/2、連結）
+
+        先清空目前有自訂值的列（處理『使用者移除自訂』），再套用 overrides。
+        overrides: { stock_id: {"i1","i2","link"} }
+        """
+        count = 0
+        with self.get_session() as session:
+            dirty = session.query(StockInfo).filter(
+                (StockInfo.custom_industry1.isnot(None))
+                | (StockInfo.custom_industry2.isnot(None))
+                | (StockInfo.custom_link.isnot(None))
+            ).all()
+            for row in dirty:
+                row.custom_industry1 = None
+                row.custom_industry2 = None
+                row.custom_link = None
+            for sid, ov in overrides.items():
+                row = session.get(StockInfo, sid)
+                if not row:
+                    continue
+                row.custom_industry1 = ov.get("i1") or None
+                row.custom_industry2 = ov.get("i2") or None
+                row.custom_link = ov.get("link") or None
+                count += 1
+        logger.info(f"自訂欄位覆寫: {count} 檔")
+        return count
 
     def get_stock_info_dict(self) -> dict[str, dict]:
         """取得股票資訊字典 (stock_id -> info)"""

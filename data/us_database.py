@@ -68,7 +68,24 @@ class USSQLiteDatabase:
     def create_tables(self):
         """建立所有美股資料表"""
         USBase.metadata.create_all(self.engine)
+        self._migrate_schema()
         logger.info("美股資料表建立完成")
+
+    def _migrate_schema(self):
+        """Schema 遷移：既有 DB 補上新欄位（如果不存在）"""
+        with self.engine.connect() as conn:
+            result = conn.execute(text("PRAGMA table_info(us_stock_info)"))
+            columns = [row[1] for row in result.fetchall()]
+            # 自訂欄位（Sheet 同步用，每月更新不覆蓋）
+            for col, ddl in (
+                ("custom_industry1", "ALTER TABLE us_stock_info ADD COLUMN custom_industry1 VARCHAR(100)"),
+                ("custom_industry2", "ALTER TABLE us_stock_info ADD COLUMN custom_industry2 VARCHAR(100)"),
+                ("custom_link", "ALTER TABLE us_stock_info ADD COLUMN custom_link VARCHAR(500)"),
+            ):
+                if col not in columns:
+                    conn.execute(text(ddl))
+                    conn.commit()
+                    logger.info(f"美股 Schema 遷移: 已添加 {col} 欄位")
 
     def drop_tables(self):
         """刪除所有美股資料表（危險操作）"""
@@ -155,6 +172,34 @@ class USSQLiteDatabase:
             query = session.query(USStockInfo)
             df = pd.read_sql(query.statement, session.bind)
         return df
+
+    def replace_custom_overrides(self, overrides: dict) -> int:
+        """以 Sheet 為準覆寫自訂欄位（產業別1/2、連結）
+
+        先清空目前有自訂值的列，再套用 overrides。
+        overrides: { stock_id: {"i1","i2","link"} }
+        """
+        count = 0
+        with self.get_session() as session:
+            dirty = session.query(USStockInfo).filter(
+                (USStockInfo.custom_industry1.isnot(None))
+                | (USStockInfo.custom_industry2.isnot(None))
+                | (USStockInfo.custom_link.isnot(None))
+            ).all()
+            for row in dirty:
+                row.custom_industry1 = None
+                row.custom_industry2 = None
+                row.custom_link = None
+            for sid, ov in overrides.items():
+                row = session.get(USStockInfo, sid)
+                if not row:
+                    continue
+                row.custom_industry1 = ov.get("i1") or None
+                row.custom_industry2 = ov.get("i2") or None
+                row.custom_link = ov.get("link") or None
+                count += 1
+        logger.info(f"美股自訂欄位覆寫: {count} 檔")
+        return count
 
     def get_stock_info_dict(self) -> dict[str, dict]:
         """取得美股股票資訊字典 (stock_id -> info)"""

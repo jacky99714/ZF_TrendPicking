@@ -182,6 +182,79 @@ class GoogleSheetExporter:
             logger.error(f"公司主檔匯出失敗: {e}")
             return False
 
+    def sync_custom_overrides(
+        self,
+        stock_master: dict,
+        sheet_id: Optional[str] = None,
+        tab_name: str = "自訂產業連結",
+    ) -> Optional[dict]:
+        """同步「自訂產業連結」分頁並讀回自訂覆蓋值
+
+        - 分頁不存在 → 建立 + 帶入全部股號股名（自訂欄留空供手動填）
+        - 分頁已存在 → 補上新股號（完全不動既有列/你的編輯）
+        - 讀回有填值的自訂欄（產業別1/2、連結）
+
+        Args:
+            stock_master: { stock_id: stock_name }（目前全部股）
+            sheet_id: 試算表 ID（預設公司主檔）
+
+        Returns:
+            { stock_id: {"i1","i2","link"} } 只含有填值的股；讀取失敗回 None（呼叫端沿用 DB 既有值）
+        """
+        sheet_id = sheet_id or SHEET_IDS.get("company_master")
+        if not sheet_id or not self.client:
+            logger.warning("自訂欄位同步：無 Sheet ID 或未連線，略過")
+            return None
+        sheet = self._get_sheet(sheet_id)
+        if not sheet:
+            return None
+
+        HEADER = ["股號", "股名", "產業別1", "產業別2", "連結"]
+        try:
+            try:
+                ws = sheet.worksheet(tab_name)
+                existing = ws.get_all_values()
+            except gspread.WorksheetNotFound:
+                ws = sheet.add_worksheet(title=tab_name, rows=len(stock_master) + 20, cols=5)
+                existing = []
+
+            # 初次建立（空的）→ 帶入全部股號股名，自訂欄留空
+            if not existing:
+                rows = [HEADER] + [[sid, stock_master[sid], "", "", ""] for sid in sorted(stock_master)]
+                need = len(rows) + 10
+                if ws.row_count < need:
+                    ws.add_rows(need - ws.row_count)
+                ws.update(rows, "A1")
+                logger.info(f"自訂產業連結分頁：初次建立，帶入 {len(stock_master)} 檔")
+                return {}
+
+            # 解析既有列（讀自訂值 + 記錄已存在的股號）
+            overrides = {}
+            seen = set()
+            for r in existing[1:]:  # 跳過標題
+                sid = r[0].strip() if len(r) > 0 and r[0] else ""
+                if not sid:
+                    continue
+                seen.add(sid)
+                i1 = r[2].strip() if len(r) > 2 and r[2] else ""
+                i2 = r[3].strip() if len(r) > 3 and r[3] else ""
+                link = r[4].strip() if len(r) > 4 and r[4] else ""
+                if i1 or i2 or link:
+                    overrides[sid] = {"i1": i1, "i2": i2, "link": link}
+
+            # 補上新股號（不動既有列，保留你的編輯）
+            missing = [(sid, stock_master[sid]) for sid in sorted(stock_master) if sid not in seen]
+            if missing:
+                ws.append_rows([[sid, name, "", "", ""] for sid, name in missing])
+                logger.info(f"自訂產業連結分頁：補上 {len(missing)} 檔新股號")
+
+            logger.info(f"自訂欄位同步：讀到 {len(overrides)} 檔有自訂值")
+            return overrides
+
+        except Exception as e:
+            logger.error(f"自訂欄位同步失敗: {e}")
+            return None
+
     def update_company_master_log(
         self,
         sheet_id: Optional[str] = None,

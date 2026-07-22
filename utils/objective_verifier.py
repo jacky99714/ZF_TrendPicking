@@ -317,14 +317,18 @@ class ObjectiveVerifier:
 
         is_strong = cond1 and cond2 and cond3
 
-        # 新高條件
+        # 新高條件：近 5 日最高價 == 近 250 交易日最高價（250 日高點落在最近 5 日內）
         high = hist["High"]
-        high_5d = high.iloc[-5:].max() if len(high) >= 5 else 0
-        high_260d = (
-            high.iloc[-260:].max() if len(high) >= 260 else high.max()
+        h5 = high.iloc[-5:].max() if len(high) >= 1 else None
+        h250 = high.iloc[-250:].max() if len(high) >= 1 else None
+        is_new_high = (
+            h5 is not None
+            and h250 is not None
+            and not np.isnan(h5)
+            and not np.isnan(h250)
+            and h5 >= h250
+            and cond3
         )
-        gap = abs(high_5d / high_260d - 1) if high_260d > 0 else 1
-        is_new_high = gap <= 0.01 and cond3
 
         should_pass = is_strong or is_new_high
         # 篩選結果中有這檔 → 系統判定通過

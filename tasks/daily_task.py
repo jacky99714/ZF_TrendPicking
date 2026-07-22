@@ -19,6 +19,11 @@ from utils.daily_verifier import DailyVerifier
 from utils.objective_verifier import ObjectiveVerifier
 from utils.price_gap_filler import fill_price_gaps
 
+# 資料源回報的「最新交易日」與交易日曆最近交易日的最大容許落差（日曆天）。
+# 超過就判定資料源給了過期/異常資料，不予採信（2026-07-14 FinMind 曾回 6/30）。
+# 抓 5 天：足以涵蓋連假（資料源正常落後），又能擋掉「倒退兩週」這種明顯異常。
+MAX_SOURCE_LAG_DAYS = 5
+
 
 class DailyTask:
     """
@@ -71,7 +76,30 @@ class DailyTask:
         Returns:
             執行結果統計
         """
-        original_date = target_date or date.today()
+        # 自動模式（未指定日期）：問「資料源」最新交易日來決定要抓哪天，而非 date.today()。
+        # 資料源自己知道颱風假、臨時休市（沒交易就沒資料），也不受排程延遲影響。
+        # 但資料源可能回「過期的爛資料」（2026-07-14 FinMind 回 6/30 害當天用兩週前資料跑），
+        # 所以一定要做合理性驗證：與交易日曆的最近交易日差距過大就不採信。
+        # fallback 順序：資料源最新日（通過驗證）→ 交易日曆最近交易日。
+        if target_date is None:
+            calendar_latest = TradingCalendar.get_latest_trading_day(date.today())
+            source_latest = self.client.get_latest_trading_date()
+
+            if source_latest and (calendar_latest - source_latest).days <= MAX_SOURCE_LAG_DAYS:
+                original_date = source_latest
+                logger.info(f"自動模式：資料源最新交易日 = {original_date}")
+            else:
+                if source_latest:
+                    logger.error(
+                        f"資料源回傳 {source_latest}，與交易日曆最近交易日 {calendar_latest} "
+                        f"差距超過 {MAX_SOURCE_LAG_DAYS} 天，判定為異常資料（不採信）"
+                    )
+                else:
+                    logger.warning("資料源查詢失敗")
+                original_date = calendar_latest
+                logger.warning(f"改用交易日曆最近交易日: {original_date}")
+        else:
+            original_date = target_date
 
         # 檢查是否為交易日
         if not TradingCalendar.is_trading_day(original_date):
@@ -125,14 +153,39 @@ class DailyTask:
                 logger.error("無法取得股票清單，任務結束")
                 return result
 
+            # Step 1.5: 同步自訂產業/連結（Google Sheet「自訂產業連結」分頁 → DB）
+            try:
+                master = {sid: (info.get("stock_name") or "") for sid, info in stock_info.items()}
+                overrides = self.exporter.sync_custom_overrides(master)
+                if overrides is not None:
+                    self.db.replace_custom_overrides(overrides)
+                else:
+                    logger.warning("自訂欄位同步回傳 None（讀取失敗），沿用 DB 既有值")
+            except Exception as e:
+                logger.warning(f"自訂欄位同步失敗（不影響後續流程）: {e}")
+
             # Step 2: 取得並儲存股價（批量查詢）
             price_count = self._fetch_and_save_prices(target_date, stock_info)
             result["price_count"] = price_count
 
             if price_count == 0:
-                result["errors"].append("無股價資料（可能非交易日）")
-                logger.warning("無股價資料，任務結束")
-                return result
+                # 防呆：當日抓到 0 筆，通常是排程延遲、在當日資料尚未產生時跑。
+                # 自動退回上一個交易日重抓，避免整個任務空跑失敗。
+                prev = TradingCalendar.get_previous_trading_day(target_date)
+                if prev and prev != target_date:
+                    logger.warning(
+                        f"{target_date} 抓到 0 筆（可能尚未收盤/資料未就緒），"
+                        f"自動退回上一交易日 {prev} 重抓"
+                    )
+                    target_date = prev
+                    result["date"] = target_date
+                    price_count = self._fetch_and_save_prices(target_date, stock_info)
+                    result["price_count"] = price_count
+
+                if price_count == 0:
+                    result["errors"].append("無股價資料（可能非交易日）")
+                    logger.warning("無股價資料，任務結束")
+                    return result
 
             # Step 2.5: 補齊歷史缺漏股價（在篩選前修好）
             try:
@@ -436,11 +489,8 @@ class DailyTask:
         # 強勢清單
         df["is_strong"] = df["cond1"] & df["cond2"] & df["cond3"] & df["cond4"] & df["cond5"]
 
-        # 新高清單
-        high_5d = df["high_5d"].fillna(0)
-        high_260d = df["high_260d"].fillna(1).replace(0, 1)
-        df["gap_to_52w_high"] = abs(high_5d / high_260d - 1)
-        df["is_new_high"] = (df["gap_to_52w_high"] <= self.vcp_filter.new_high_tolerance) & df["cond5"]
+        # 新高清單：近 5 日最高價 == 近 250 交易日最高價（250 日高點落在最近 5 日內）
+        df["is_new_high"] = (df["high_5d"] >= df["high_250d"]) & df["cond5"]
 
         # VCP = 強勢 OR 新高
         df["is_vcp"] = df["is_strong"] | df["is_new_high"]

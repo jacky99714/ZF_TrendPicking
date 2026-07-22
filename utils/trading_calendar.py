@@ -134,6 +134,32 @@ class TradingCalendar:
         return None
 
     @classmethod
+    def get_next_trading_day(
+        cls,
+        from_date: date,
+        max_lookahead: int = 10
+    ) -> Optional[date]:
+        """
+        取得下一個交易日
+
+        Args:
+            from_date: 起始日期
+            max_lookahead: 最多往後查找天數
+
+        Returns:
+            下一個交易日，找不到則回傳 None
+        """
+        current = from_date + timedelta(days=1)
+
+        for _ in range(max_lookahead):
+            if cls.is_trading_day(current):
+                return current
+            current += timedelta(days=1)
+
+        logger.warning(f"找不到 {from_date} 後 {max_lookahead} 天內的交易日")
+        return None
+
+    @classmethod
     def get_latest_trading_day(
         cls,
         from_date: Optional[date] = None,

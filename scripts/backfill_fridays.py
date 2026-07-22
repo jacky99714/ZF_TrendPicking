@@ -92,6 +92,7 @@ def _extract_vcp_indicators(row, market_return: float) -> str:
         "market_return": safe_round(market_return, 4),
         "high_5d": safe_round(row.get("high_5d")),
         "high_260d": safe_round(row.get("high_260d")),
+        "high_250d": safe_round(row.get("high_250d")),
     }
     return json.dumps(indicators, ensure_ascii=False)
 
@@ -132,30 +133,40 @@ def calculate_market_return(market_df, target_date, lookback=20):
 
 
 def run_filters_for_date(
-    db, target_date, stock_info, new_high_tolerance=0.01
+    db, target_date, stock_info, new_high_tolerance=0.01,
+    vcp_data=None, sanxian_data=None, market_df=None
 ):
-    """對指定日期執行篩選，同時提取指標值"""
-    start_date = target_date - timedelta(days=400)
-    price_df = db.get_daily_prices(start_date, target_date)
-    market_df = db.get_market_index(start_date, target_date)
+    """對指定日期執行篩選，同時提取指標值。
 
-    if price_df.empty:
-        return {"date": target_date, "vcp": 0, "sanxian": 0, "skipped": "no_price"}
+    若提供已對「全歷史」prepare 過的 vcp_data／sanxian_data／market_df（且 date 欄已轉為
+    datetime.date），則直接切片，跳過每日重複載入與 rolling 重算——供 recompute_new_high
+    全量重算大幅加速（避免對每個日期重複計算相同的移動平均與高點）。
+    """
+    if vcp_data is None or sanxian_data is None or market_df is None:
+        start_date = target_date - timedelta(days=400)
+        price_df = db.get_daily_prices(start_date, target_date)
+        market_df = db.get_market_index(start_date, target_date)
 
-    valid_ids = set(stock_info.keys())
-    price_df = price_df[price_df["stock_id"].isin(valid_ids)]
-    if price_df.empty:
-        return {"date": target_date, "vcp": 0, "sanxian": 0, "skipped": "no_valid_stock"}
+        if price_df.empty:
+            return {"date": target_date, "vcp": 0, "sanxian": 0, "skipped": "no_price"}
 
-    price_dates = pd.to_datetime(price_df["date"]).dt.date
-    if target_date not in price_dates.values:
-        return {"date": target_date, "vcp": 0, "sanxian": 0, "skipped": "no_data_on_date"}
+        valid_ids = set(stock_info.keys())
+        price_df = price_df[price_df["stock_id"].isin(valid_ids)]
+        if price_df.empty:
+            return {"date": target_date, "vcp": 0, "sanxian": 0, "skipped": "no_valid_stock"}
+
+        price_dates = pd.to_datetime(price_df["date"]).dt.date
+        if target_date not in price_dates.values:
+            return {"date": target_date, "vcp": 0, "sanxian": 0, "skipped": "no_data_on_date"}
+
+        vcp_data = MovingAverageCalculator.prepare_vcp_data(price_df.copy())
+        vcp_data["date"] = pd.to_datetime(vcp_data["date"]).dt.date
+        sanxian_data = MovingAverageCalculator.prepare_sanxian_data(price_df.copy())
+        sanxian_data["date"] = pd.to_datetime(sanxian_data["date"]).dt.date
 
     market_return = calculate_market_return(market_df, target_date, lookback=20)
 
-    # === VCP: prepare + filter + extract indicators ===
-    vcp_data = MovingAverageCalculator.prepare_vcp_data(price_df.copy())
-    vcp_data["date"] = pd.to_datetime(vcp_data["date"]).dt.date
+    # === VCP: filter + extract indicators ===
     vcp_today = vcp_data[vcp_data["date"] == target_date].copy()
 
     vcp_results = []
@@ -169,12 +180,13 @@ def run_filters_for_date(
             (close > ma50) & (ma50 > ma150) & (ma150 > ma200)
             & (vcp_today["ma200_slope_20d"].fillna(-1) > 0)
         )
-        beat_market = vcp_today["return_20d"].fillna(-float("inf")) > market_return
+        # 打敗大盤（含防呆：排除 20 日報酬異常的分割/合股假訊號，與 VCPFilter 一致）
+        ret = vcp_today["return_20d"].fillna(-float("inf"))
+        sane_return = (ret > -0.9) & (ret < 5.0)
+        beat_market = (ret > market_return) & sane_return
 
-        high_5d = vcp_today["high_5d"].fillna(0)
-        high_260d = vcp_today["high_260d"].fillna(1).replace(0, 1)
-        gap = abs(high_5d / high_260d - 1)
-        new_high_mask = (gap <= new_high_tolerance) & (high_260d > 0)
+        # 新高：近 5 日最高價 == 近 250 交易日最高價（250 日高點落在最近 5 日內）
+        new_high_mask = vcp_today["high_5d"] >= vcp_today["high_250d"]
 
         vcp_today = vcp_today.copy()
         vcp_today.loc[:, "is_strong"] = strong_mask & beat_market
@@ -196,9 +208,7 @@ def run_filters_for_date(
             }
             vcp_results.append(result)
 
-    # === Sanxian: prepare + filter + extract indicators ===
-    sanxian_data = MovingAverageCalculator.prepare_sanxian_data(price_df.copy())
-    sanxian_data["date"] = pd.to_datetime(sanxian_data["date"]).dt.date
+    # === Sanxian: filter + extract indicators ===
     sanxian_today = sanxian_data[sanxian_data["date"] == target_date].copy()
 
     sanxian_results = []

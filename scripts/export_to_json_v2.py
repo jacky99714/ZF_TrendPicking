@@ -11,7 +11,7 @@
     stock_name → n, market → m, industry → i
     date → d, type → t (vcp/sx)
     is_strong → s, is_new_high → h
-    return_20d → r, gap_ratio → g
+    return_20d → r（VCP 與三線皆用；gap_ratio → g 已停用）
 
 用法：
     python scripts/export_to_json_v2.py
@@ -115,14 +115,88 @@ def query_results(db_path, table, market, sector_col="industry_category"):
             r["h"] = bool(row["is_new_high_list"])
         else:
             r["t"] = "sx"
-            r["g"] = safe_round(
-                row["gap_ratio"] * 100 if row["gap_ratio"] is not None else None
+            # 三線改顯示 20 日漲幅（原突破差距 gap_ratio 已從前端移除）
+            r["r"] = safe_round(
+                row["return_20d"] * 100 if row["return_20d"] is not None else None
             )
 
         results.append(r)
 
     print(f"✅ {market}: {len(results)} 筆")
     return results
+
+
+def query_market_returns(db_path, table, col):
+    """計算大盤 20 日漲幅（pct_change(20)，與 VCP market_return 一致）
+
+    Returns:
+        { "2026-07-14": 1.29, ... }  百分比、四捨五入 2 位
+    """
+    if not os.path.exists(db_path):
+        return {}
+    conn = sqlite3.connect(db_path)
+    rows = [
+        (str(d)[:10], v)
+        for d, v in conn.execute(f"SELECT date, {col} FROM {table} ORDER BY date")
+        if v is not None
+    ]
+    conn.close()
+
+    out = {}
+    for i in range(20, len(rows)):
+        d, v = rows[i]
+        prev = rows[i - 20][1]
+        if prev:
+            out[d] = round((v / prev - 1) * 100, 2)
+    return out
+
+
+def query_secondary_industry(db_path, table, col):
+    """讀取第二產業（台股 industry_category2 / 美股 industry），供產業欄顯示兩級
+
+    Returns:
+        { stock_id: 第二產業 }  只含有值的股
+    """
+    if not os.path.exists(db_path):
+        return {}
+    conn = sqlite3.connect(db_path)
+    cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+    if col not in cols:
+        conn.close()
+        return {}
+    out = {}
+    for sid, v in conn.execute(f"SELECT stock_id, {col} FROM {table}"):
+        v = (v or "").strip()
+        if v and v != "-":
+            out[sid] = v
+    conn.close()
+    return out
+
+
+def query_custom_overrides(db_path, table):
+    """讀取自訂欄位（產業別1/2、連結），供 Page 覆蓋顯示用
+
+    Returns:
+        { stock_id: {"i1":.., "i2":.., "link":..} }  只含有填值的股
+    """
+    if not os.path.exists(db_path):
+        return {}
+    conn = sqlite3.connect(db_path)
+    cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+    if not {"custom_industry1", "custom_industry2", "custom_link"}.issubset(cols):
+        conn.close()
+        return {}
+    out = {}
+    for sid, i1, i2, link in conn.execute(
+        f"SELECT stock_id, custom_industry1, custom_industry2, custom_link FROM {table}"
+    ):
+        i1 = (i1 or "").strip()
+        i2 = (i2 or "").strip()
+        link = (link or "").strip()
+        if i1 or i2 or link:
+            out[sid] = {"i1": i1, "i2": i2, "link": link}
+    conn.close()
+    return out
 
 
 def main():
@@ -144,6 +218,10 @@ def main():
             tw_stock_types[row[0]] = row[1]
         tw_conn.close()
 
+    # 第二產業（台股 industry_category2 / 美股 industry），讓產業欄顯示兩級
+    tw_ind2 = query_secondary_industry(tw_db, "stock_info", "industry_category2")
+    us_ind2 = query_secondary_industry(us_db, "us_stock_info", "industry")
+
     # === 1. 建立股票主檔 ===
     stocks = {}
     stock_months = defaultdict(set)  # stock_id -> set of months
@@ -154,7 +232,11 @@ def main():
         stock_months[sid].add(month)
 
         if sid not in stocks:
-            info = {"n": r["n"], "m": r["m"], "i": r["i"]}
+            # 產業欄顯示兩級：產業別1 · 產業別2（皆有值時）
+            secondary = (tw_ind2 if r["m"] == "tw" else us_ind2).get(sid, "")
+            parts = [p for p in (r["i"], secondary) if p and p != "-"]
+            industry = " · ".join(parts) if parts else "-"
+            info = {"n": r["n"], "m": r["m"], "i": industry}
             # 台股加入 exchange（twse/tpex）給 TradingView 用
             if r["m"] == "tw" and sid in tw_stock_types:
                 info["e"] = tw_stock_types[sid]
@@ -163,6 +245,23 @@ def main():
     # 加入每檔股票出現的月份列表（讓搜尋知道要載入哪些月份）
     for sid, info in stocks.items():
         info["ms"] = sorted(stock_months[sid], reverse=True)
+
+    # === 套用自訂覆蓋（產業別1/2 覆蓋顯示產業、連結寫入 l）===
+    overrides = {}
+    overrides.update(query_custom_overrides(tw_db, "stock_info"))
+    overrides.update(query_custom_overrides(us_db, "us_stock_info"))
+    override_count = 0
+    for sid, ov in overrides.items():
+        if sid not in stocks:
+            continue
+        parts = [p for p in (ov["i1"], ov["i2"]) if p]
+        if parts:
+            stocks[sid]["i"] = " · ".join(parts)
+        if ov["link"].startswith(("http://", "https://")):
+            stocks[sid]["l"] = ov["link"]
+        override_count += 1
+    if override_count:
+        print(f"✅ 套用自訂覆蓋: {override_count} 檔")
 
     # === 2. 按月份拆分結果 ===
     months_data = defaultdict(list)
@@ -182,14 +281,20 @@ def main():
             if r.get("r") is not None:
                 entry["r"] = r["r"]
         else:  # sanxian
-            if r.get("g") is not None:
-                entry["g"] = r["g"]
+            if r.get("r") is not None:
+                entry["r"] = r["r"]
 
         months_data[month].append(entry)
 
     # === 3. 寫入 index.json ===
     sorted_months = sorted(all_months, reverse=True)
     all_dates = sorted({r["d"] for r in all_results})
+
+    # 大盤 20 日漲幅（台股加權指數 / 美股 S&P500），供前端「大盤基準列」使用
+    market_returns = {
+        "tw": query_market_returns(tw_db, "market_index", "taiex"),
+        "us": query_market_returns(us_db, "us_market_index", "sp500"),
+    }
 
     index = {
         "generated_at": date.today().isoformat(),
@@ -199,6 +304,7 @@ def main():
         "last_date": all_dates[-1] if all_dates else "",
         "months": sorted_months,
         "stocks": stocks,
+        "mr": market_returns,
     }
 
     index_path = OUTPUT_DIR / "index.json"

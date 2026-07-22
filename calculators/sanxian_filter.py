@@ -98,8 +98,16 @@ class SanxianFilter:
         high_55d = df["high_55d"].fillna(float("inf"))
         cond2 = close >= high_55d
 
+        # 防呆：排除 20 日漲幅異常（分割/合股未修正的假訊號）
+        # 只排除「有值且超出 -90% ~ +500%」；無值（新股不足 20 日）保留，不誤殺
+        if "return_20d" in df.columns:
+            ret = df["return_20d"]
+            sane = ~(ret.notna() & ((ret <= -0.9) | (ret >= 5.0)))
+        else:
+            sane = pd.Series(True, index=df.index)
+
         # 合併條件
-        result_mask = cond1 & cond2
+        result_mask = cond1 & cond2 & sane
         result_df = df[result_mask].copy()
 
         if result_df.empty:
@@ -126,6 +134,7 @@ class SanxianFilter:
             "today_price",
             "second_high_55d",
             "gap_ratio",
+            "return_20d",
         ]
         result_df = result_df[[c for c in output_columns if c in result_df.columns]]
 

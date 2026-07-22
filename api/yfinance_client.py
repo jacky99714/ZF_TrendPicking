@@ -593,6 +593,81 @@ class YFinanceClient:
 
         return pd.DataFrame()
 
+    # 判斷交易日用的指標股（台股權值股）。用「多檔」而非單檔，是因為單一個股
+    # 在正常交易日也可能 0 成交（停牌、冷門股），只有「全部都 0 成交」才是休市。
+    DEFAULT_REF_STOCKS = ["2330", "2317", "2454", "2412", "1301"]
+
+    def get_latest_trading_date(
+        self,
+        ref_stocks: Optional[list[str]] = None,
+        lookback_days: int = 14,
+    ) -> Optional[date]:
+        """查詢 yfinance 實際有交易的最新交易日（多檔指標股投票）。
+
+        判定規則：某日只要**任一檔指標股 Volume > 0**，就算交易日；
+        **全部指標股都 0 成交**才判定為休市日。
+
+        為什麼要這樣做：
+        1. yfinance 會為休市日捏造資料——2026-07-10 台股因颱風全日休市，
+           yfinance 仍給出該日 OHLC（全部等於 7/09 收盤價），破綻只有 Volume=0。
+           不濾掉的話會把不存在的交易日當成最新日（2026-07-13 就因此抓了假的
+           7/10、把整批假股價寫進 DB）。
+        2. 但**不能只看單一檔**：個股在正常交易日也可能 0 成交（停牌、冷門股），
+           單檔判斷會把真實交易日誤殺。多檔投票可避免。
+        3. 也不能用大盤指數（^TWII）的成交量：實測 2026-07-14 是真實交易日，
+           ^TWII 的 Volume 卻是 0，會誤殺。
+
+        真實交易日即使 Close 還是 NaN（盤中/尚未結算），Volume 仍然 > 0。
+
+        Args:
+            ref_stocks: 指標股清單（預設台股權值股；美股請傳 ["AAPL", ...]）
+            lookback_days: 往前查幾個日曆天（需涵蓋連假）
+
+        Returns:
+            最新「有實際成交」的交易日；查不到回傳 None
+        """
+        stocks = ref_stocks or self.DEFAULT_REF_STOCKS
+        start = date.today() - timedelta(days=lookback_days)
+        end = date.today() + timedelta(days=1)
+
+        # 收集每個日期「有成交的指標股檔數」
+        traded_dates: set[date] = set()
+        ok_count = 0
+
+        for stock_id in stocks:
+            symbol = self._to_tw_symbol(stock_id) if stock_id.isdigit() else stock_id
+            try:
+                hist = yf.Ticker(symbol).history(
+                    start=start, end=end, auto_adjust=False
+                )
+            except Exception as e:
+                logger.warning(f"yfinance 指標股 {symbol} 查詢失敗: {e}")
+                continue
+
+            if hist is None or hist.empty or "Volume" not in hist.columns:
+                continue
+
+            ok_count += 1
+            traded = hist[hist["Volume"].fillna(0) > 0]
+            for ts in traded.index:
+                traded_dates.add(ts.date() if hasattr(ts, "date") else ts)
+
+        if not ok_count:
+            self._log_error("get_latest_trading_date", "所有指標股都查詢失敗")
+            logger.warning("yfinance 所有指標股都查不到資料")
+            return None
+
+        if not traded_dates:
+            logger.warning("yfinance 指標股近期都沒有成交紀錄（無法判斷交易日）")
+            return None
+
+        latest = max(traded_dates)
+        logger.info(
+            f"yfinance 最新交易日 = {latest}"
+            f"（{ok_count}/{len(stocks)} 檔指標股可用，已排除全市場 0 成交的休市日）"
+        )
+        return latest
+
     def _log_error(self, method: str, error: str):
         """記錄錯誤"""
         self._error_log.append({

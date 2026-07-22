@@ -464,6 +464,54 @@ class FinMindClient:
         logger.info(f"取得 {len(df)} 筆股價資料")
         return df
 
+    def get_latest_trading_date(
+        self,
+        ref_stock: str = "2330",
+        lookback_days: int = 14,
+    ) -> Optional[date]:
+        """查詢 FinMind 實際擁有資料的最新交易日（用單一指標股判斷）。
+
+        必須帶 data_id 做「單檔查詢」，不能用 get_stock_price()：
+        後者不帶 data_id、一律拉全市場，而台股全市場「單日就約 4 萬筆」，
+        已逼近 FinMind 單次查詢上限。一旦查超過一天就會被靜默截斷、
+        只回「區間第一天」且仍回報 success——2026-07-14 就因此把最新交易日
+        誤判成 6/30，害當天用兩週前的資料跑篩選。
+        單檔查詢只有 10 筆左右，不會觸發截斷。
+
+        Args:
+            ref_stock: 指標股代號（預設台積電 2330，每個交易日必有成交）
+            lookback_days: 往前查幾個日曆天（需涵蓋連假）
+
+        Returns:
+            FinMind 有資料的最新交易日；查不到回傳 None（由呼叫端 fallback）
+        """
+        start_date = date.today() - timedelta(days=lookback_days)
+        params = {
+            "dataset": "TaiwanStockPrice",
+            "data_id": ref_stock,          # ← 關鍵：單檔查詢，避免全市場截斷
+            "start_date": start_date.strftime("%Y-%m-%d"),
+            "end_date": date.today().strftime("%Y-%m-%d"),
+        }
+
+        try:
+            data = self._make_request(params)
+        except FinMindError as e:
+            logger.warning(f"FinMind 查詢最新交易日失敗（{ref_stock}）: {e}")
+            return None
+
+        raw_data = data.get("data", [])
+        if not raw_data:
+            logger.warning(f"FinMind 查無 {ref_stock} 近 {lookback_days} 天的資料")
+            return None
+
+        dates = [row["date"] for row in raw_data if row.get("date")]
+        if not dates:
+            return None
+
+        latest = pd.to_datetime(max(dates)).date()
+        logger.info(f"FinMind 最新交易日（{ref_stock}）= {latest}")
+        return latest
+
     def get_market_index(
         self,
         start_date: date,
