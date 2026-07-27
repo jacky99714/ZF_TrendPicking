@@ -474,6 +474,7 @@ class DailyTask:
         準備 VCP 驗證資料（包含所有計算欄位）
         """
         from calculators.moving_average import MovingAverageCalculator
+        from config.settings import VCP_PARAMS
 
         if price_df.empty:
             return []
@@ -501,12 +502,17 @@ class DailyTask:
         df["cond3"] = ma150 > ma200
         df["cond4"] = df["ma200_slope_20d"].fillna(-1) > 0
         df["cond5"] = df["return_20d"].fillna(-float("inf")) > market_return
+        # cond6: 離 250 日盤中最低點 ≥ 30%（收盤 > low_250d × 1.30，強勢/新高共用）
+        # low_250d 為 NaN（資料不足）時比較為 False，不誤選
+        df["cond6"] = close > df["low_250d"] * VCP_PARAMS["low_250d_mult"]
 
         # 強勢清單
-        df["is_strong"] = df["cond1"] & df["cond2"] & df["cond3"] & df["cond4"] & df["cond5"]
+        df["is_strong"] = (
+            df["cond1"] & df["cond2"] & df["cond3"] & df["cond4"] & df["cond5"] & df["cond6"]
+        )
 
         # 新高清單：近 5 日最高價 == 近 250 交易日最高價（250 日高點落在最近 5 日內）
-        df["is_new_high"] = (df["high_5d"] >= df["high_250d"]) & df["cond5"]
+        df["is_new_high"] = (df["high_5d"] >= df["high_250d"]) & df["cond5"] & df["cond6"]
 
         # VCP = 強勢 OR 新高
         df["is_vcp"] = df["is_strong"] | df["is_new_high"]

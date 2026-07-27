@@ -180,9 +180,12 @@ def run_us_filters_for_date(db, target_date, stock_info, new_high_tolerance=0.01
         # 新高：近 5 日最高價 == 近 250 交易日最高價（250 日高點落在最近 5 日內）
         new_high_mask = vcp_today["high_5d"] >= vcp_today["high_250d"]
 
+        # 離 250 日盤中最低點 ≥ 30%（收盤 > low_250d × 1.30，強勢/新高共用；NaN 比較為 False）
+        off_low = close > vcp_today["low_250d"] * US_VCP_PARAMS["low_250d_mult"]
+
         vcp_today = vcp_today.copy()
-        vcp_today.loc[:, "is_strong"] = strong_mask & beat_market
-        vcp_today.loc[:, "is_new_high"] = new_high_mask & beat_market
+        vcp_today.loc[:, "is_strong"] = strong_mask & beat_market & off_low
+        vcp_today.loc[:, "is_new_high"] = new_high_mask & beat_market & off_low
         vcp_filtered = vcp_today[vcp_today["is_strong"] | vcp_today["is_new_high"]]
 
         for _, row in vcp_filtered.iterrows():

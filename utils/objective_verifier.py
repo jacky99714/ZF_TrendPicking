@@ -315,7 +315,24 @@ class ObjectiveVerifier:
         )
         cond3 = return_20d > market_return
 
-        is_strong = cond1 and cond2 and cond3
+        # 條件 4: 離 250 日盤中最低點 ≥ 30%（收盤 > low_250d × 1.30，強勢/新高共用）
+        from config.settings import VCP_PARAMS
+        from config.us_settings import US_VCP_PARAMS
+
+        low_mult = (
+            US_VCP_PARAMS["low_250d_mult"]
+            if self.market == "us"
+            else VCP_PARAMS["low_250d_mult"]
+        )
+        low = hist["Low"]
+        low250 = low.iloc[-250:].min() if len(low) >= 1 else None
+        cond4 = (
+            low250 is not None
+            and not np.isnan(low250)
+            and today_close > low250 * low_mult
+        )
+
+        is_strong = cond1 and cond2 and cond3 and cond4
 
         # 新高條件：近 5 日最高價 == 近 250 交易日最高價（250 日高點落在最近 5 日內）
         high = hist["High"]
@@ -328,6 +345,7 @@ class ObjectiveVerifier:
             and not np.isnan(h250)
             and h5 >= h250
             and cond3
+            and cond4
         )
 
         should_pass = is_strong or is_new_high
@@ -344,6 +362,7 @@ class ObjectiveVerifier:
                 "cond1": cond1,
                 "cond2": cond2,
                 "cond3": cond3,
+                "cond4": cond4,
                 "is_strong": is_strong,
                 "is_new_high": is_new_high,
             },

@@ -16,14 +16,16 @@ class VCPFilter:
     VCP (Volatility Contraction Pattern) 強勢股篩選器
 
     篩選邏輯:
-    1. 強勢清單（3 條件 AND）:
+    1. 強勢清單（4 條件 AND）:
        - 收盤價 > MA50 > MA150 > MA200
        - MA200 今日 > MA200 20日前
        - 股票 20 日報酬 > 大盤 20 日報酬
+       - 收盤價 > 近 250 交易日盤中最低價 × 1.30（離低點至少 30%）
 
-    2. 新高清單（2 條件 AND）:
+    2. 新高清單（3 條件 AND）:
        - 近 5 日最高價 == 近 250 交易日最高價（250 日最高點落在最近 5 日內）
        - 股票 20 日報酬 > 大盤 20 日報酬
+       - 收盤價 > 近 250 交易日盤中最低價 × 1.30（離低點至少 30%）
 
     3. 最終結果 = 強勢清單 UNION 新高清單
     """
@@ -115,10 +117,14 @@ class VCPFilter:
         sane_return = (return_20d > -0.9) & (return_20d < 5.0)
         beat_market_mask = (return_20d > market_return_20d) & sane_return
 
+        # 離 250 日低點門檻（強勢/新高共用）：收盤 > 近250日盤中最低 × 1.30
+        # low_250d 由 prepare_vcp_data 產生；NaN（資料不足）比較為 False，不誤選
+        off_low_mask = df["close_price"].fillna(0) > df["low_250d"] * VCP_PARAMS["low_250d_mult"]
+
         # 合併條件（使用 .loc 避免 SettingWithCopyWarning）
         df = df.copy()
-        df.loc[:, "is_strong"] = strong_mask & beat_market_mask
-        df.loc[:, "is_new_high"] = new_high_mask & beat_market_mask
+        df.loc[:, "is_strong"] = strong_mask & beat_market_mask & off_low_mask
+        df.loc[:, "is_new_high"] = new_high_mask & beat_market_mask & off_low_mask
 
         # 篩選出符合任一條件的股票
         result_mask = df["is_strong"] | df["is_new_high"]
